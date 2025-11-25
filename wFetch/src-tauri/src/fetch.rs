@@ -194,7 +194,7 @@ pub fn get_gpu_info() -> Vec<GpuInfo> {
 
 pub fn get_disk_info() -> DiskInfo {
     unsafe {
-        let mut free_bytes: u64 = 0;
+        let mut free_bytes: u64 = 0; //declare values as unsigned 64 bit integers
         let mut total_bytes: u64 = 0;
         let mut free_to_caller: u64 = 0;
         
@@ -204,7 +204,7 @@ pub fn get_disk_info() -> DiskInfo {
             Some(&mut total_bytes),
             Some(&mut free_bytes),
         ).is_ok() {
-            let total_gb = total_bytes as f64 / (1024.0 * 1024.0 * 1024.0);
+            let total_gb = total_bytes as f64 / (1024.0 * 1024.0 * 1024.0); //declare value
             let free_gb = free_bytes as f64 / (1024.0 * 1024.0 * 1024.0);
             DiskInfo { total_gb, free_gb }
         } else {

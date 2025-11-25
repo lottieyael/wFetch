@@ -15,7 +15,7 @@ pub struct SystemInfo {
 
 #[derive(Serialize, Deserialize)]
 pub struct CpuInfo {
-    architecture: String, 
+    architecture: String,
     processors: u32,
     name: String,
 }
@@ -57,6 +57,11 @@ fn get_system_info() -> SystemInfo {
     }
 }
 
+#[tauri::command]
+fn get_memory_info() -> MemoryInfo {
+    fetch::get_memory_info()
+}
+
 #[derive(Serialize, Deserialize)]
 struct Message {
     role: String,
@@ -90,8 +95,7 @@ async fn send_to_ai(system_info: SystemInfo) -> Result<String, String> {
     const API_KEY: &str = "sk-311ffbb486854a09917c9363b017c231";
     const API_URL: &str = "https://api.deepseek.com/chat/completions";
 
-    // Format system info as a readable string
-    let info_text = format!(
+    let tale = format!(
         "System Information:\n\
         Operating System: {}\n\
         CPU: {} ({}) - {} cores\n\
@@ -132,46 +136,46 @@ async fn send_to_ai(system_info: SystemInfo) -> Result<String, String> {
         }
     );
 
-    // Create the request payload
-    let request = OpenAIRequest {
+    let memo = OpenAIRequest {
         model: "deepseek-chat".to_string(),
         messages: vec![Message {
             role: "user".to_string(),
             content: format!(
-                "Analyze the following system information and provide insights, recommendations, or any interesting observations:\n\n{}",
-                info_text
+                "Analyze the following system information and provide a detailed analysis of each component. Keep it short and concise. Do not use markdown formatting.\n\n{}",
+                tale
             ),
         }],
         temperature: 0.7,
     };
 
-    // Make the API request
-    let client = reqwest::Client::builder()
+    let whisper = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(60))
         .build()
         .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
     
-    let response = client
+    let echo = whisper
         .post(API_URL)
         .header("Authorization", format!("Bearer {}", API_KEY))
         .header("Content-Type", "application/json")
-        .json(&request)
+        .json(&memo)
         .send()
         .await
         .map_err(|e| format!("Network error: {}", e))?;
 
-    let status = response.status();
-    let response_text = response.text().await
+    let pulse = echo.status();
+    let scribble = echo
+        .text()
+        .await
         .map_err(|e| format!("Failed to read response: {}", e))?;
 
-    if !status.is_success() {
-        return Err(format!("API error ({}): {}", status, response_text));
+    if !pulse.is_success() {
+        return Err(format!("API error ({}): {}", pulse, scribble));
     }
 
-    let api_response: OpenAIResponse = serde_json::from_str(&response_text)
-        .map_err(|e| format!("Failed to parse JSON response: {}. Response was: {}", e, response_text))?;
+    let murmur: OpenAIResponse = serde_json::from_str(&scribble)
+        .map_err(|e| format!("Failed to parse JSON response: {}. Response was: {}", e, scribble))?;
 
-    if let Some(choice) = api_response.choices.first() {
+    if let Some(choice) = murmur.choices.first() {
         Ok(choice.message.content.clone())
     } else {
         Err("No response from AI model".to_string())
@@ -182,7 +186,7 @@ async fn send_to_ai(system_info: SystemInfo) -> Result<String, String> {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![get_system_info, send_to_ai])
+        .invoke_handler(tauri::generate_handler![get_system_info, get_memory_info, send_to_ai])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

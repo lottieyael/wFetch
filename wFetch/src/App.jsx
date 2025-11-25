@@ -1,85 +1,102 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import "./App.css";
 
 function App() {
-  const [systemInfo, setSystemInfo] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [aiResponse, setAiResponse] = useState(null);
-  const [aiLoading, setAiLoading] = useState(false);
-  const [aiError, setAiError] = useState(null);
-  const [cooldownEndTime, setCooldownEndTime] = useState(null);
-  const [cooldownRemaining, setCooldownRemaining] = useState(0);
+  const [bits, setBits] = useState(null);
+  const [waiting, setWaiting] = useState(true);
+  const [mood, setMood] = useState(null);
+  const [story, setStory] = useState(null);
+  const [storyBusy, setStoryBusy] = useState(false);
+  const [storyOops, setStoryOops] = useState(null);
+  const [pauseUntil, setPauseUntil] = useState(null);
+  const [ticks, setTicks] = useState(0);
+  const memoryIntervalStarted = useRef(false);
 
   useEffect(() => {
-    async function fetchSystemInfo() {
+    const grab = async () => {
       try {
         const info = await invoke("get_system_info");
-        setSystemInfo(info);
+        setBits(info);
       } catch (err) {
-        console.error("Failed to fetch system info:", err);
-        setError(err.message || "Failed to load system information");
+        setMood(err?.message || "Failed to load system information");
       } finally {
-        setLoading(false);
+        setWaiting(false);
       }
-    }
-    fetchSystemInfo();
+    };
+    grab();
   }, []);
 
-  // Cooldown countdown effect
   useEffect(() => {
-    if (!cooldownEndTime) {
-      setCooldownRemaining(0);
-      return;
-    }
-
-    const updateCooldown = () => {
-      const now = Date.now();
-      const remaining = Math.max(0, Math.ceil((cooldownEndTime - now) / 1000));
-      setCooldownRemaining(remaining);
-
-      if (remaining <= 0) {
-        setCooldownEndTime(null);
+    if (waiting || !bits || memoryIntervalStarted.current) return;
+    
+    memoryIntervalStarted.current = true;
+    
+    const updateMemory = async () => {
+      try {
+        const memoryInfo = await invoke("get_memory_info");
+        setBits(prevBits => {
+          if (!prevBits) return prevBits;
+          return {
+            ...prevBits,
+            memory: memoryInfo
+          };
+        });
+      } catch (err) {
+        console.error("Failed to update memory info:", err);
       }
     };
 
-    // Update immediately
-    updateCooldown();
-
-    // Update every second
-    const interval = setInterval(updateCooldown, 1000);
-
-    return () => clearInterval(interval);
-  }, [cooldownEndTime]);
-
-  async function handleSendToAI() {
-    if (!systemInfo || cooldownRemaining > 0) return;
+    // Run immediately, then every 5 seconds
+    updateMemory();
+    const interval = setInterval(updateMemory, 5000);
     
-    setAiLoading(true);
-    setAiError(null);
-    setAiResponse(null);
-    
-    try {
-      const response = await invoke("send_to_ai", { systemInfo });
-      setAiResponse(response);
-      // Set cooldown to 1 minute (60 seconds) after request completes
-      setCooldownEndTime(Date.now() + 60000);
-    } catch (err) {
-      console.error("Failed to send to AI:", err);
-      // Tauri errors can be strings or objects
-      const errorMessage = typeof err === 'string' 
-        ? err 
-        : err?.message || err?.toString() || "Failed to get AI analysis";
-      setAiError(errorMessage);
-      // Set cooldown even on error to prevent spam
-      setCooldownEndTime(Date.now() + 60000);
-    } finally {
-      setAiLoading(false);
+    return () => {
+      clearInterval(interval);
+      memoryIntervalStarted.current = false;
+    };
+  }, [waiting]);
+
+  useEffect(() => {
+    if (!pauseUntil) {
+      setTicks(0);
+      return;
     }
-  }
+    const refresh = () => {
+      const now = Date.now();
+      const left = Math.max(0, Math.ceil((pauseUntil - now) / 1000));
+      setTicks(left);
+      if (left <= 0) {
+        setPauseUntil(null);
+      }
+    };
+    refresh();
+    const timer = setInterval(refresh, 1000);
+    return () => clearInterval(timer);
+  }, [pauseUntil]);
 
-  if (loading) {
+  const nudgeStory = async () => {
+    if (!bits || ticks > 0) return;
+    setStoryBusy(true);
+    setStoryOops(null);
+    setStory(null);
+    try {
+      const reply = await invoke("send_to_ai", { systemInfo: bits });
+      setStory(reply);
+      setPauseUntil(Date.now() + 60000);
+    } catch (err) {
+      const words =
+        typeof err === "string"
+          ? err
+          : err?.message || err?.toString() || "Failed to get AI analysis";
+      setStoryOops(words);
+      setPauseUntil(Date.now() + 60000);
+    } finally {
+      setStoryBusy(false);
+    }
+  };
+
+  if (waiting) {
     return (
       <div className="container">
         <div className="loading-state">
@@ -90,22 +107,22 @@ function App() {
     );
   }
 
-  if (error || !systemInfo) {
+  if (mood || !bits) {
     return (
       <div className="container">
         <div className="error-state">
           <div className="error-icon">!</div>
-          <p className="error-text">{error || "Failed to load system information"}</p>
+          <p className="error-text">{mood || "Failed to load system information"}</p>
         </div>
       </div>
     );
   }
 
-  const { os, cpu, memory, system, gpus, disk, network } = systemInfo;
-  const usedMemory = memory.total_gb - memory.free_gb;
-  const memoryPercent = memory.total_gb > 0 ? (usedMemory / memory.total_gb) * 100 : 0;
-  const usedDisk = disk.total_gb - disk.free_gb;
-  const diskPercent = disk.total_gb > 0 ? (usedDisk / disk.total_gb) * 100 : 0;
+  const { os, cpu, memory, system, gpus, disk, network } = bits;
+  const memoryUsed = memory.total_gb - memory.free_gb;
+  const memorySlice = memory.total_gb > 0 ? (memoryUsed / memory.total_gb) * 100 : 0;
+  const diskUsed = disk.total_gb - disk.free_gb;
+  const diskSlice = disk.total_gb > 0 ? (diskUsed / disk.total_gb) * 100 : 0;
 
   return (
     <main className="container">
@@ -114,30 +131,22 @@ function App() {
           <h1 className="app-title">wFetch</h1>
           <p className="app-subtitle">System Overview</p>
         </div>
-        <button 
-          className="ai-button"
-          onClick={handleSendToAI}
-          disabled={aiLoading || cooldownRemaining > 0}
-        >
-          {aiLoading 
-            ? "Analyzing..." 
-            : cooldownRemaining > 0 
-            ? `Cooldown: ${cooldownRemaining}s`
-            : "Analyze with AI"}
+        <button className="ai-button" onClick={nudgeStory} disabled={storyBusy || ticks > 0}>
+          {storyBusy ? "Analyzing..." : ticks > 0 ? `Cooldown: ${ticks}s` : "Analyze with AI"}
         </button>
       </header>
 
-      {aiError && (
+      {storyOops && (
         <div className="ai-response error">
           <h3>AI Analysis Error</h3>
-          <p>{aiError}</p>
+          <p>{storyOops}</p>
         </div>
       )}
 
-      {aiResponse && (
+      {story && (
         <div className="ai-response">
           <h3>AI Analysis</h3>
-          <div className="ai-content">{aiResponse}</div>
+          <div className="ai-content">{story}</div>
         </div>
       )}
 
@@ -154,13 +163,13 @@ function App() {
 
         <InfoCard title="Memory">
           <div className="metric-display">
-            <div className="metric-value">{usedMemory.toFixed(1)} GB</div>
+            <div className="metric-value">{memoryUsed.toFixed(1)} GB</div>
             <div className="metric-total">of {memory.total_gb.toFixed(1)} GB</div>
           </div>
-          <ProgressBar percent={memoryPercent} color="blue" />
+          <ProgressBar percent={memorySlice} color="blue" />
           <div className="metric-details">
             <span className="metric-detail">Free: {memory.free_gb.toFixed(1)} GB</span>
-            <span className="metric-percent">{memoryPercent.toFixed(1)}%</span>
+            <span className="metric-percent">{memorySlice.toFixed(1)}%</span>
           </div>
         </InfoCard>
 
@@ -172,7 +181,7 @@ function App() {
         <InfoCard title="Graphics">
           {gpus.length > 0 ? (
             gpus.map((gpu, index) => (
-              <InfoRow 
+              <InfoRow
                 key={index}
                 label={`GPU ${index + 1}`}
                 value={gpu.name}
@@ -186,25 +195,19 @@ function App() {
 
         <InfoCard title="Storage">
           <div className="metric-display">
-            <div className="metric-value">{usedDisk.toFixed(1)} GB</div>
+            <div className="metric-value">{diskUsed.toFixed(1)} GB</div>
             <div className="metric-total">of {disk.total_gb.toFixed(1)} GB</div>
           </div>
-          <ProgressBar percent={diskPercent} color="purple" />
+          <ProgressBar percent={diskSlice} color="purple" />
           <div className="metric-details">
             <span className="metric-detail">Free: {disk.free_gb.toFixed(1)} GB</span>
-            <span className="metric-percent">{diskPercent.toFixed(1)}%</span>
+            <span className="metric-percent">{diskSlice.toFixed(1)}%</span>
           </div>
         </InfoCard>
 
         <InfoCard title="Network">
           {network.length > 0 ? (
-            network.map((adapter, index) => (
-              <InfoRow 
-                key={index}
-                label={`Adapter ${index + 1}`}
-                value={adapter}
-              />
-            ))
+            network.map((adapter, index) => <InfoRow key={index} label={`Adapter ${index + 1}`} value={adapter} />)
           ) : (
             <InfoRow label="" value="No active adapters" />
           )}
@@ -238,17 +241,18 @@ function InfoRow({ label, value, extra }) {
 }
 
 function ProgressBar({ percent, color }) {
-  const gradient = color === 'blue' 
-    ? 'linear-gradient(90deg, #007AFF 0%, #5E5CE6 100%)'
-    : 'linear-gradient(90deg, #AF52DE 0%, #FF2D55 100%)';
+  const gradient =
+    color === "blue"
+      ? "linear-gradient(90deg, #007AFF 0%, #5E5CE6 100%)"
+      : "linear-gradient(90deg, #AF52DE 0%, #FF2D55 100%)";
 
   return (
     <div className="progress-container">
-      <div 
+      <div
         className="progress-bar"
         style={{
           width: `${percent}%`,
-          background: gradient
+          background: gradient,
         }}
       >
         <div className="progress-shine"></div>
