@@ -50,6 +50,8 @@ body {
   background-clip: text;
   margin-bottom: 8px;
   letter-spacing: -2px;
+  background-size: 200% 200%;
+  animation: titleGradient 6s ease-in-out infinite;
 }
 
 .app-subtitle {
@@ -111,6 +113,71 @@ body {
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+.os-card {
+  position: relative;
+  border-radius: 18px;
+  padding: 20px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+}
+
+.os-card::after {
+  content: "";
+  position: absolute;
+  top: -40%;
+  right: -10%;
+  width: 200px;
+  height: 200px;
+  background: radial-gradient(circle, rgba(175, 82, 222, 0.35), transparent 60%);
+  filter: blur(10px);
+  z-index: 0;
+}
+
+.os-primary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  font-size: 28px;
+  font-weight: 700;
+  background: linear-gradient(135deg, #007AFF 0%, #5E5CE6 50%, #AF52DE 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  position: relative;
+  z-index: 1;
+}
+
+.os-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #ffffff;
+  background: rgba(94, 92, 230, 0.3);
+  border: 1px solid rgba(94, 92, 230, 0.4);
+  backdrop-filter: blur(8px);
+}
+
+.os-chip.subtle {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.15);
+  color: rgba(255, 255, 255, 0.85);
+  font-weight: 500;
+}
+
+.os-meta {
+  margin-top: 16px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  position: relative;
+  z-index: 1;
 }
 
 .info-item {
@@ -306,6 +373,18 @@ body {
   }
 }
 
+@keyframes titleGradient {
+  0% {
+    background-position: 100% 50%;
+  }
+  50% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 100% 50%;
+  }
+}
+
 /* Responsive styles */
 @media (max-width: 768px) {
   .container {
@@ -348,6 +427,8 @@ body {
 /* AI Button Styles */
 .ai-button {
   background: linear-gradient(135deg, #007AFF 0%, #5E5CE6 50%, #AF52DE 100%);
+  background-size: 200% 200%;
+  animation: titleGradient 6s ease-in-out infinite;
   border: none;
   border-radius: 12px;
   padding: 12px 24px;

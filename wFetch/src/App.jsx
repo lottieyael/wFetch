@@ -198,7 +198,7 @@ function App() {
             <div className="metric-value">{diskUsed.toFixed(1)} GB</div>
             <div className="metric-total">of {disk.total_gb.toFixed(1)} GB</div>
           </div>
-          <ProgressBar percent={diskSlice} color="purple" />
+          <ProgressBar percent={diskSlice} color="blue" />
           <div className="metric-details">
             <span className="metric-detail">Free: {disk.free_gb.toFixed(1)} GB</span>
             <span className="metric-percent">{diskSlice.toFixed(1)}%</span>
