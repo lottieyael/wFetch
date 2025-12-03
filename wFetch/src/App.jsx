@@ -11,6 +11,7 @@ function App() {
   const [storyOops, setStoryOops] = useState(null);
   const [pauseUntil, setPauseUntil] = useState(null);
   const [ticks, setTicks] = useState(0);
+  const [analyzePercent, setAnalyzePercent] = useState(0);
   const memoryIntervalStarted = useRef(false);
 
   useEffect(() => {
@@ -75,6 +76,27 @@ function App() {
     return () => clearInterval(timer);
   }, [pauseUntil]);
 
+  useEffect(() => {
+    if (!storyBusy) {
+      setAnalyzePercent(0);
+      return;
+    }
+
+    setAnalyzePercent(0);
+    const timer = setInterval(() => {
+      setAnalyzePercent((prev) => {
+        if (prev >= 99) {
+          // hover just under 100% until the request finishes
+          return 99;
+        }
+        const increment = 1 + Math.floor(Math.random() * 5);
+        return Math.min(99, prev + increment);
+      });
+    }, 200);
+
+    return () => clearInterval(timer);
+  }, [storyBusy]);
+
   const nudgeStory = async () => {
     if (!bits || ticks > 0) return;
     setStoryBusy(true);
@@ -132,7 +154,7 @@ function App() {
           <p className="app-subtitle">System Overview</p>
         </div>
         <button className="ai-button" onClick={nudgeStory} disabled={storyBusy || ticks > 0}>
-          {storyBusy ? "Analyzing..." : ticks > 0 ? `Cooldown: ${ticks}s` : "Analyze with AI"}
+          {storyBusy ? `Analyzing... ${analyzePercent}%` : ticks > 0 ? `Cooldown: ${ticks}s` : "Analyze with AI"}
         </button>
       </header>
 
