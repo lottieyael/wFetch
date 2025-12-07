@@ -12,9 +12,10 @@
   "app": {
     "windows": [
       {
-        "title": "wfetch",
-        "width": 800,
-        "height": 600
+        "title": "wFetch",
+        "fullscreen": false,
+        "resizable": true,
+        "decorations": true
       }
     ],
     "security": {

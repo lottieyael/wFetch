@@ -33,6 +33,7 @@ body {
   padding: 40px 24px;
   max-width: 1400px;
   margin: 0 auto;
+  animation: pageEnter 0.5s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* Fix for header layout on all pages */
@@ -460,6 +461,33 @@ body {
   }
 }
 
+/* Page transition animations */
+@keyframes pageEnter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pageExit {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+}
+
+.page-exiting {
+  animation: pageExit 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
 /* Responsive styles */
 @media (max-width: 768px) {
   .container {
@@ -536,14 +564,14 @@ body {
   color: #ffffff;
   cursor: pointer;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 4px 16px rgba(0, 122, 255, 0.3);
+  box-shadow: 0 4px 16px var(--shadow-color, rgba(0,0,0,0.3));
   position: relative;
   overflow: hidden;
 }
 
 .ai-button:hover:not(:disabled) {
   transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(0, 122, 255, 0.4);
+  box-shadow: 0 8px 24px var(--shadow-color, rgba(0,0,0,0.35));
 }
 
 .ai-button:active:not(:disabled) {
@@ -715,9 +743,28 @@ body {
   font-size: 13px;
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.setting-select:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+.setting-select:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px rgba(0, 122, 255, 0.2);
 }
 
 .setting-select:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* Style dropdown options */
+.setting-select option {
+  background: #1a1a2e;
+  color: #ffffff;
 }

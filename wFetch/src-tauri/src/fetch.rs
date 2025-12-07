@@ -158,7 +158,14 @@ pub fn get_gpu_info() -> Vec<GpuInfo> {
                 match factory.EnumAdapters(i) {
                     Ok(adapter) => {
                         if let Ok(desc) = adapter.GetDesc() {
-                            let vram_mb = (desc.DedicatedVideoMemory / (1024 * 1024)) as u64;
+                            let dedicated_vram = (desc.DedicatedVideoMemory / (1024 * 1024)) as u64;
+                            let shared_system = (desc.SharedSystemMemory / (1024 * 1024)) as u64;
+                            // For integrated GPUs, use shared system memory if it's larger
+                            let vram_mb = if shared_system > dedicated_vram {
+                                shared_system
+                            } else {
+                                dedicated_vram
+                            };
                             let name = String::from_utf16_lossy(&desc.Description);
                             let name = name.trim_end_matches('\0').to_string();
                             gpus.push(GpuInfo { name, vram_mb });

@@ -45,21 +45,39 @@ pub struct DiskInfo {
 }
 
 #[tauri::command]
-fn get_system_info() -> SystemInfo {
+fn get_fast_system_info() -> SystemInfo {
     SystemInfo {
         os: fetch::get_os_info(),
         cpu: fetch::get_cpu_info(),
         memory: fetch::get_memory_info(),
         system: fetch::get_system_info(),
-        gpus: fetch::get_gpu_info(),
+        gpus: Vec::new(),      // Empty placeholder
         disk: fetch::get_disk_info(),
-        network: fetch::get_network_info(),
+        network: Vec::new(),   // Empty placeholder
     }
 }
 
 #[tauri::command]
 fn get_memory_info() -> MemoryInfo {
     fetch::get_memory_info()
+}
+
+#[tauri::command]
+fn get_gpu_info() -> Vec<GpuInfo> {
+    fetch::get_gpu_info()
+}
+
+#[tauri::command]
+fn get_network_info() -> Vec<String> {
+    fetch::get_network_info()
+}
+
+#[tauri::command]
+fn get_system_info() -> SystemInfo {
+    let mut info = get_fast_system_info();
+    info.gpus = get_gpu_info();
+    info.network = get_network_info();
+    info
 }
 
 #[derive(Serialize, Deserialize)]
@@ -91,9 +109,19 @@ struct ResponseMessage {
 }
 
 #[tauri::command]
-async fn send_to_ai(system_info: SystemInfo) -> Result<String, String> {
+async fn send_to_ai(system_info: SystemInfo, lang: Option<String>) -> Result<String, String> {
     const API_KEY: &str = "sk-311ffbb486854a09917c9363b017c231";
     const API_URL: &str = "https://api.deepseek.com/chat/completions";
+
+    // map short codes to language names for the prompt
+    let lang_code = lang.unwrap_or_else(|| "en".to_string());
+    let lang_name = match lang_code.as_str() {
+        "es" => "Spanish",
+        "fr" => "French",
+        "hu" => "Hungarian",
+        "zh" => "Chinese (Simplified)",
+        _ => "English",
+    };
 
     let tale = format!(
         "System Information:\n\
@@ -141,8 +169,8 @@ async fn send_to_ai(system_info: SystemInfo) -> Result<String, String> {
         messages: vec![Message {
             role: "user".to_string(),
             content: format!(
-                "You are embedded in a system analysis tool. Analyze the following system information and provide a detailed analysis of each component. Keep it short and concise. Do not use markdown formatting such as asterisks.\n\n{}",
-                tale
+                "You are embedded in a system analysis tool. Analyze the following system information and provide a detailed analysis of each component. Keep it short and concise. Do not use markdown formatting such as asterisks. Please respond in {}.\n\n{}",
+                lang_name, tale
             ),
         }],
         temperature: 0.7,
@@ -185,8 +213,14 @@ async fn send_to_ai(system_info: SystemInfo) -> Result<String, String> {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
-        .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![get_system_info, get_memory_info, send_to_ai])
+        .invoke_handler(tauri::generate_handler![
+            get_system_info,
+            get_memory_info,
+            send_to_ai,
+            get_fast_system_info,
+            get_gpu_info,
+            get_network_info,
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
