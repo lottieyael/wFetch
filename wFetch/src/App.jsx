@@ -12,6 +12,8 @@ function App() {
   const [pauseUntil, setPauseUntil] = useState(null);
   const [ticks, setTicks] = useState(0);
   const [analyzePercent, setAnalyzePercent] = useState(0);
+  const [currentPage, setCurrentPage] = useState("overview");
+  const [theme, setTheme] = useState("system");
   const memoryIntervalStarted = useRef(false);
 
   useEffect(() => {
@@ -27,6 +29,63 @@ function App() {
     };
     grab();
   }, []);
+
+   useEffect(() => {
+    applyTheme(theme);
+  }, [theme]);
+
+  
+const applyTheme = (themeName) => {
+  const themes = {
+    system: {
+      primary: "#007AFF",
+      secondary: "#5E5CE6",
+      tertiary: "#AF52DE",
+      background: "linear-gradient(135deg, #000000 0%, #1a1a2e 50%, #2b163e 100%)",
+      textPrimary: "#ffffff",
+      textSecondary: "rgba(255, 255, 255, 0.6)",
+      cardBg: "rgba(255, 255, 255, 0.08)",
+      cardBorder: "rgba(255, 255, 255, 0.18)",
+      shadowColor: "rgba(0, 0, 0, 0.3)",
+    },
+    light: {
+      primary: "#2D7A4A",
+      secondary: "#74D19A",
+      tertiary: "#54E9C9",
+      background: "linear-gradient(135deg, #F5F5F5 0%, #E8F5E9 50%, #E0F2F1 100%)",
+      textPrimary: "#1a1a1a",
+      textSecondary: "rgba(26, 26, 26, 0.6)",
+      cardBg: "rgba(255, 255, 255, 0.85)",
+      cardBorder: "rgba(26, 26, 26, 0.08)",
+      shadowColor: "rgba(45, 122, 74, 0.15)",
+    },
+    dark: {
+      primary: "#FF0000",
+      secondary: "#FF5B0F",
+      tertiary: "#FCB045",
+      background: "linear-gradient(135deg, #1a1a1a 0%, #2d1a1a 50%, #3d2222 100%)",
+      textPrimary: "#ffffff",
+      textSecondary: "rgba(255, 255, 255, 0.6)",
+      cardBg: "rgba(255, 255, 255, 0.06)",
+      cardBorder: "rgba(255, 255, 255, 0.12)",
+      shadowColor: "rgba(139, 69, 19, 0.25)",
+    },
+  };
+
+  const selectedTheme = themes[themeName] || themes.system;
+  const root = document.documentElement;
+
+  root.style.setProperty("--color-primary", selectedTheme.primary);
+  root.style.setProperty("--color-secondary", selectedTheme.secondary);
+  root.style.setProperty("--color-tertiary", selectedTheme.tertiary);
+  root.style.setProperty("--gradient-background", selectedTheme.background);
+  root.style.setProperty("--text-primary", selectedTheme.textPrimary);
+  root.style.setProperty("--text-secondary", selectedTheme.textSecondary);
+  root.style.setProperty("--card-bg", selectedTheme.cardBg);
+  root.style.setProperty("--card-border", selectedTheme.cardBorder);
+  root.style.setProperty("--shadow-color", selectedTheme.shadowColor);
+};
+  
 
   useEffect(() => {
     if (waiting || !bits || memoryIntervalStarted.current) return;
@@ -146,15 +205,104 @@ function App() {
   const diskUsed = disk.total_gb - disk.free_gb;
   const diskSlice = disk.total_gb > 0 ? (diskUsed / disk.total_gb) * 100 : 0;
 
+if (currentPage === "settings") {
+  return (
+    <main className="container settings-page">
+    <header className="header">
+      <button
+        type="button"
+        className="back-button"
+        onClick={() => setCurrentPage("overview")}
+      >
+      ← Back to overview
+      </button>
+          
+      <div className="header-content">
+        <h1 className="app-title">Settings</h1>
+        <p className="app-subtitle">Customization and app info</p>
+      </div>
+          
+      {/* Empty div for spacing consistency */}
+      <div style={{ width: "110px" }}></div>
+      </header>
+
+      <div className="info-grid settings-grid">
+        <InfoCard title="Application">
+          <InfoRow label="Version" value="1.3.2" />
+        </InfoCard>
+
+        <InfoCard title="Theme">
+          <div className="setting-row">
+            <div className="setting-control">
+              <button
+                type="button"
+                className={`pill-toggle ${theme === "system" ? "pill-toggle-active" : ""}`}
+                onClick={() => setTheme("system")}
+              >
+                Cosmic Purple
+              </button>
+              <button
+                type="button"
+                className={`pill-toggle ${theme === "light" ? "pill-toggle-active" : ""}`}
+                onClick={() => setTheme("light")}
+              >
+                Fresh Air
+              </button>
+              <button
+                type="button"
+                className={`pill-toggle ${theme === "dark" ? "pill-toggle-active" : ""}`}
+                onClick={() => setTheme("dark")}
+              >
+                Inferno Red
+              </button>
+            </div>
+          </div>
+        </InfoCard>
+
+        <InfoCard title="Language">
+          <div className="setting-row">
+            <div className="setting-label">
+              Language
+              <span className="setting-help">Coming soon</span>
+            </div>
+            <div className="setting-control">
+              <select className="setting-select" disabled>
+                <option>English (default)</option>
+              </select>
+            </div>
+          </div>
+        </InfoCard>
+      </div>
+    </main>
+  );
+}
+
   return (
     <main className="container">
       <header className="header">
+        <button
+          type="button"
+          className="settings-button"
+          onClick={() => setCurrentPage("settings")}
+          aria-label="Open settings"
+        >
+          <span className="settings-icon">⚙️</span>
+          <span className="settings-label">Settings</span>
+        </button>
         <div className="header-content">
           <h1 className="app-title">wFetch</h1>
           <p className="app-subtitle">System Overview</p>
         </div>
-        <button className="ai-button" onClick={nudgeStory} disabled={storyBusy || ticks > 0}>
-          {storyBusy ? `Analyzing... ${analyzePercent}%` : ticks > 0 ? `Cooldown: ${ticks}s` : "Analyze with AI"}
+        <button
+          className="ai-button"
+          onClick={nudgeStory}
+          disabled={storyBusy || ticks > 0}
+        >
+          {storyBusy
+            ? `Analyzing... ${analyzePercent}%`
+            : ticks > 0
+            ? `Cooldown: ${ticks}s`
+            : "Analyze with AI"}
         </button>
       </header>
 
@@ -166,11 +314,15 @@ function App() {
       )}
 
       {story && (
-        <div className="ai-response">
-          <h3>AI Analysis</h3>
-          <div className="ai-content">{story}</div>
-        </div>
-      )}
+  <div className="ai-response">
+    <h3>AI Analysis</h3>
+    <div className="ai-content">
+      {story.split('\n').map((paragraph, index) => (
+        paragraph.trim() ? <p key={index}>{paragraph}</p> : null
+      ))}
+    </div>
+  </div>
+)}
 
       <div className="info-grid">
         <InfoCard title="Operating System">

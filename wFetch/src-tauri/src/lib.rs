@@ -141,7 +141,7 @@ async fn send_to_ai(system_info: SystemInfo) -> Result<String, String> {
         messages: vec![Message {
             role: "user".to_string(),
             content: format!(
-                "Analyze the following system information and provide a detailed analysis of each component. Keep it short and concise. Do not use markdown formatting.\n\n{}",
+                "You are embedded in a system analysis tool. Analyze the following system information and provide a detailed analysis of each component. Keep it short and concise. Do not use markdown formatting such as asterisks.\n\n{}",
                 tale
             ),
         }],
