@@ -14,7 +14,11 @@ function App() {
   const [ticks, setTicks] = useState(0);
   const [analyzePercent, setAnalyzePercent] = useState(0);
   const [currentPage, setCurrentPage] = useState("overview");
-  const [theme, setTheme] = useState("system");
+  const [saveTheme, setSaveTheme] = useState(() => localStorage.getItem("saveTheme") === "true");
+  const [theme, setTheme] = useState(() => {
+    const shouldSave = localStorage.getItem("saveTheme") === "true";
+    return shouldSave ? (localStorage.getItem("theme") || "system") : "system";
+  });
   const [language, setLanguage] = useState(() => localStorage.getItem("language") || "en");
   const [isExiting, setIsExiting] = useState(false);
   const memoryIntervalStarted = useRef(false);
@@ -22,6 +26,18 @@ function App() {
   useEffect(() => {
     localStorage.setItem("language", language);
   }, [language]);
+
+  useEffect(() => {
+    localStorage.setItem("saveTheme", saveTheme.toString());
+  }, [saveTheme]);
+
+  useEffect(() => {
+    if (saveTheme) {
+      localStorage.setItem("theme", theme);
+    } else {
+      localStorage.removeItem("theme");
+    }
+  }, [theme, saveTheme]);
 
   useEffect(() => {
     const grab = async () => {
@@ -75,6 +91,8 @@ function App() {
         cardBg: "rgba(255, 255, 255, 0.08)",
         cardBorder: "rgba(255, 255, 255, 0.18)",
         shadowColor: "rgba(0, 0, 0, 0.3)",
+        accentShadow: "rgba(0, 122, 255, 0.3)",
+        focusRing: "rgba(0, 122, 255, 0.2)",
       },
       light: {
         primary: "#2D7A4A",
@@ -86,6 +104,8 @@ function App() {
         cardBg: "rgba(255, 255, 255, 0.85)",
         cardBorder: "rgba(26, 26, 26, 0.08)",
         shadowColor: "rgba(45, 122, 74, 0.15)",
+        accentShadow: "rgba(45, 122, 74, 0.3)",
+        focusRing: "rgba(45, 122, 74, 0.2)",
       },
       dark: {
         primary: "#FF0000",
@@ -97,6 +117,34 @@ function App() {
         cardBg: "rgba(255, 255, 255, 0.06)",
         cardBorder: "rgba(255, 255, 255, 0.12)",
         shadowColor: "rgba(139, 69, 19, 0.25)",
+        accentShadow: "rgba(255, 0, 0, 0.3)",
+        focusRing: "rgba(255, 0, 0, 0.2)",
+      },
+      cherry: {
+        primary: "#FF1493",
+        secondary: "#FF69B4",
+        tertiary: "#FFB6C1",
+        background: "linear-gradient(135deg, #FFF0F5 0%, #FFE4E1 50%, #FFF5EE 100%)",
+        textPrimary: "#2D1B2E",
+        textSecondary: "rgba(45, 27, 46, 0.6)",
+        cardBg: "rgba(255, 255, 255, 0.9)",
+        cardBorder: "rgba(255, 20, 147, 0.15)",
+        shadowColor: "rgba(255, 105, 180, 0.2)",
+        accentShadow: "rgba(255, 20, 147, 0.3)",
+        focusRing: "rgba(255, 20, 147, 0.2)",
+      },
+      midnight: {
+        primary: "#00D9FF",
+        secondary: "#A78BFA",
+        tertiary: "#818CF8",
+        background: "linear-gradient(135deg, #000000 0%, #0a0a0f 50%, #050510 100%)",
+        textPrimary: "#E0E7FF",
+        textSecondary: "rgba(224, 231, 255, 0.5)",
+        cardBg: "rgba(255, 255, 255, 0.02)",
+        cardBorder: "rgba(167, 139, 250, 0.15)",
+        shadowColor: "rgba(0, 0, 0, 0.8)",
+        accentShadow: "rgba(0, 217, 255, 0.4)",
+        focusRing: "rgba(0, 217, 255, 0.3)",
       },
     };
 
@@ -112,6 +160,8 @@ function App() {
     root.style.setProperty("--card-bg", selectedTheme.cardBg);
     root.style.setProperty("--card-border", selectedTheme.cardBorder);
     root.style.setProperty("--shadow-color", selectedTheme.shadowColor);
+    root.style.setProperty("--accent-shadow", selectedTheme.accentShadow);
+    root.style.setProperty("--focus-ring", selectedTheme.focusRing);
   };
   
 
@@ -274,22 +324,52 @@ function App() {
                   className={`pill-toggle ${theme === "system" ? "pill-toggle-active" : ""}`}
                   onClick={() => setTheme("system")}
                 >
-                  Cosmic Purple
+                  {t("settings.themes.system", language)}
                 </button>
                 <button
                   type="button"
                   className={`pill-toggle ${theme === "light" ? "pill-toggle-active" : ""}`}
                   onClick={() => setTheme("light")}
                 >
-                  Fresh Air
+                  {t("settings.themes.light", language)}
                 </button>
                 <button
                   type="button"
                   className={`pill-toggle ${theme === "dark" ? "pill-toggle-active" : ""}`}
                   onClick={() => setTheme("dark")}
                 >
-                  Inferno Red
+                  {t("settings.themes.dark", language)}
                 </button>
+                <button
+                  type="button"
+                  className={`pill-toggle ${theme === "cherry" ? "pill-toggle-active" : ""}`}
+                  onClick={() => setTheme("cherry")}
+                >
+                  {t("settings.themes.cherry", language)}
+                </button>
+                <button
+                  type="button"
+                  className={`pill-toggle ${theme === "midnight" ? "pill-toggle-active" : ""}`}
+                  onClick={() => setTheme("midnight")}
+                >
+                  {t("settings.themes.midnight", language)}
+                </button>
+              </div>
+            </div>
+            <div className="setting-row">
+              <div className="setting-label">
+                {t("settings.saveThemePreference", language)}
+                <span className="setting-help">{t("settings.saveThemeHelp", language)}</span>
+              </div>
+              <div className="setting-control">
+                <label className="toggle-switch">
+                  <input
+                    type="checkbox"
+                    checked={saveTheme}
+                    onChange={(e) => setSaveTheme(e.target.checked)}
+                  />
+                  <span className="toggle-slider"></span>
+                </label>
               </div>
             </div>
           </InfoCard>
@@ -360,16 +440,42 @@ function App() {
         <div className="ai-response">
           <h3>AI Analysis</h3>
           <div className="ai-content">
-            {story.split('\n').map((paragraph, index) => (
-              paragraph.trim() ? <p key={index}>{paragraph}</p> : null
-            ))}
+            {(() => {
+              const paragraphs = story.split('\n').filter(p => p.trim());
+              let currentDelay = 0;
+              const step = 8;
+              
+              return paragraphs.map((paragraph, index) => {
+                const delay = currentDelay;
+                currentDelay += (paragraph.length * step) + 200;
+                return (
+                  <p key={index}>
+                    <FadingText text={paragraph} startDelay={delay} step={step} />
+                  </p>
+                );
+              });
+            })()}
           </div>
         </div>
       )}
 
       <div className="info-grid">
         <InfoCard title={t("cards.os", language)}>
-          <InfoRow label="Version" value={bits.os} />
+        <div className="os-display">
+          <div className="os-info">
+            <div className="os-name">{bits.os.split(' (Build')[0]}</div>
+            <div className="os-meta-info">
+              <div className="os-badge architecture">
+                <span className="badge-label">{t("labels.architecture", language)}</span>
+                <span className="badge-value">{bits.cpu.architecture}</span>
+              </div>
+              <div className="os-badge">
+                <span className="badge-label">Build</span>
+                <span className="badge-value">{bits.os.match(/Build (\d+)/)?.[1] || "Unknown"}</span>
+              </div>
+            </div>
+          </div>
+        </div>
         </InfoCard>
 
         <InfoCard title={t("cards.processor", language)}>
@@ -398,12 +504,23 @@ function App() {
         <InfoCard title={t("cards.graphics", language)}>
           {gpus.length > 0 ? (
             gpus.map((gpu, index) => (
-              <InfoRow
-                key={index}
-                label={`${t("labels.gpu", language)} ${index + 1}`}
-                value={gpu.name}
-                extra={gpu.vram_mb > 0 ? `${gpu.vram_mb} MB ${t("labels.vram", language)}` : null}
-              />
+              <div key={index} className="gpu-display">
+                <div className="gpu-info">
+                  <div className="gpu-name">{gpu.name}</div>
+                  <div className="gpu-meta-info">
+                    <div className="gpu-badge manufacturer">
+                      <span className="badge-label">Manufacturer</span>
+                      <span className="badge-value">{gpu.manufacturer}</span>
+                    </div>
+                    {gpu.vram_mb > 0 && (
+                      <div className="gpu-badge">
+                        <span className="badge-label">VRAM</span>
+                        <span className="badge-value">{gpu.vram_mb} MB</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
             ))
           ) : (
             <InfoRow label="" value={t("labels.noGpus", language)} />
@@ -475,6 +592,23 @@ function ProgressBar({ percent, color }) {
         <div className="progress-shine"></div>
       </div>
     </div>
+  );
+}
+
+function FadingText({ text, startDelay = 0, step = 20 }) {
+  const chars = Array.from(text);
+  return (
+    <span className="fading-text" aria-label={text}>
+      {chars.map((ch, i) => (
+        <span
+          key={i}
+          className="ai-char"
+          style={{ animationDelay: `${startDelay + i * step}ms` }}
+        >
+          {ch === ' ' ? '\u00A0' : ch}
+        </span>
+      ))}
+    </span>
   );
 }
 

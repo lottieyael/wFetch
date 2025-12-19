@@ -21,6 +21,19 @@ use windows::Win32::Storage::FileSystem::*;
 
 use crate::{CpuInfo, MemoryInfo, SystemInfoData, GpuInfo, DiskInfo};
 
+fn detect_gpu_manufacturer(name: &str) -> String {
+    let name_upper = name.to_uppercase();
+    if name_upper.contains("NVIDIA") || name_upper.contains("GEFORCE") || name_upper.contains("QUADRO") || name_upper.contains("RTX") || name_upper.contains("GTX") {
+        "NVIDIA".to_string()
+    } else if name_upper.contains("AMD") || name_upper.contains("RADEON") || name_upper.contains("RX ") {
+        "AMD".to_string()
+    } else if name_upper.contains("INTEL") || name_upper.contains("HD GRAPHICS") || name_upper.contains("UHD GRAPHICS") || name_upper.contains("IRIS") {
+        "Intel".to_string()
+    } else {
+        "Unknown".to_string()
+    }
+}
+
 pub fn get_cpu_info() -> CpuInfo {
     unsafe {
         let mut si: SYSTEM_INFO = mem::zeroed();
@@ -150,14 +163,20 @@ pub fn get_gpu_info() -> Vec<GpuInfo> {
         let com_initialized = CoInitializeEx(None, COINIT_MULTITHREADED).is_ok();
         let mut gpus = Vec::new();
         
-        let factory: Result<IDXGIFactory> = CreateDXGIFactory();
+        let factory: Result<IDXGIFactory1> = CreateDXGIFactory1();
         
         if let Ok(factory) = factory {
             let mut i = 0;
             loop {
-                match factory.EnumAdapters(i) {
+                match factory.EnumAdapters1(i) {
                     Ok(adapter) => {
-                        if let Ok(desc) = adapter.GetDesc() {
+                        if let Ok(desc) = adapter.GetDesc1() {
+                            // Skip software renderers like Microsoft Basic Render Driver
+                            if (desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE.0 as u32) != 0 {
+                                i += 1;
+                                continue;
+                            }
+                            
                             let dedicated_vram = (desc.DedicatedVideoMemory / (1024 * 1024)) as u64;
                             let shared_system = (desc.SharedSystemMemory / (1024 * 1024)) as u64;
                             // For integrated GPUs, use shared system memory if it's larger
@@ -168,7 +187,8 @@ pub fn get_gpu_info() -> Vec<GpuInfo> {
                             };
                             let name = String::from_utf16_lossy(&desc.Description);
                             let name = name.trim_end_matches('\0').to_string();
-                            gpus.push(GpuInfo { name, vram_mb });
+                            let manufacturer = detect_gpu_manufacturer(&name);
+                            gpus.push(GpuInfo { name, vram_mb, manufacturer });
                         }
                         i += 1;
                     }
@@ -189,7 +209,8 @@ pub fn get_gpu_info() -> Vec<GpuInfo> {
             if (dd.StateFlags & DISPLAY_DEVICE_ACTIVE) != 0 {
                 let name = String::from_utf16_lossy(&dd.DeviceString);
                 let name = name.trim_end_matches('\0').to_string();
-                gpus.push(GpuInfo { name, vram_mb: 0 });
+                let manufacturer = detect_gpu_manufacturer(&name);
+                gpus.push(GpuInfo { name, vram_mb: 0, manufacturer });
             }
             i += 1;
         }

@@ -36,6 +36,7 @@ pub struct SystemInfoData {
 pub struct GpuInfo {
     name: String,
     vram_mb: u64,
+    manufacturer: String,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -169,7 +170,7 @@ async fn send_to_ai(system_info: SystemInfo, lang: Option<String>) -> Result<Str
         messages: vec![Message {
             role: "user".to_string(),
             content: format!(
-                "You are embedded in a system analysis tool. Analyze the following system information and provide a detailed analysis of each component. Keep it short and concise. Do not use markdown formatting such as asterisks. Please respond in {}.\n\n{}",
+                "You are embedded in a system analysis tool. Analyze the following system information in a way that is helpful for the general user. Keep it clear and concise. Do not use markdown formatting. Don't just list the components. Please respond in {}.\n\n{}",
                 lang_name, tale
             ),
         }],
