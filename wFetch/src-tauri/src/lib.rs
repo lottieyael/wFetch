@@ -1,6 +1,8 @@
 mod fetch;
+mod lemonsqueezy;
 
 use serde::{Deserialize, Serialize};
+use tauri::AppHandle;
 
 #[derive(Serialize, Deserialize)]
 pub struct SystemInfo {
@@ -111,8 +113,10 @@ struct ResponseMessage {
 
 #[tauri::command]
 async fn send_to_ai(system_info: SystemInfo, lang: Option<String>) -> Result<String, String> {
-    const API_KEY: &str = "sk-311ffbb486854a09917c9363b017c231";
     const API_URL: &str = "https://api.deepseek.com/chat/completions";
+
+    let api_key = std::env::var("DEEPSEEK_API_KEY")
+        .map_err(|_| "DEEPSEEK_API_KEY is not set. Configure it to enable AI analysis.".to_string())?;
 
     // map short codes to language names for the prompt
     let lang_code = lang.unwrap_or_else(|| "en".to_string());
@@ -170,7 +174,7 @@ async fn send_to_ai(system_info: SystemInfo, lang: Option<String>) -> Result<Str
         messages: vec![Message {
             role: "user".to_string(),
             content: format!(
-                "You are embedded in a system analysis tool. Analyze the following system information in a way that is helpful for the general user. Keep it clear and concise. Do not use markdown formatting. Don't just list the components. Please respond in {}.\n\n{}",
+                "You are embedded in a system analysis tool. Analyze the following system information in a way that is helpful for the general user. Keep it clear and concise. Do NOT use markdown formatting. Don't just list the components. Please respond in {}.\n\n{}",
                 lang_name, tale
             ),
         }],
@@ -184,7 +188,7 @@ async fn send_to_ai(system_info: SystemInfo, lang: Option<String>) -> Result<Str
     
     let echo = whisper
         .post(API_URL)
-        .header("Authorization", format!("Bearer {}", API_KEY))
+        .header("Authorization", format!("Bearer {}", api_key))
         .header("Content-Type", "application/json")
         .json(&memo)
         .send()
@@ -211,8 +215,36 @@ async fn send_to_ai(system_info: SystemInfo, lang: Option<String>) -> Result<Str
     }
 }
 
+
+#[tauri::command]
+fn ls_get_entitlements(app: AppHandle) -> Result<lemonsqueezy::Entitlements, String> {
+    lemonsqueezy::get_entitlements(&app)
+}
+
+#[tauri::command]
+async fn ls_activate_license(
+    app: AppHandle,
+    license_key: String,
+    instance_name: String,
+) -> Result<lemonsqueezy::Entitlements, String> {
+    lemonsqueezy::activate_license(&app, license_key, instance_name).await
+}
+
+#[tauri::command]
+async fn ls_refresh_entitlements(app: AppHandle) -> Result<lemonsqueezy::Entitlements, String> {
+    lemonsqueezy::refresh_entitlements(&app).await
+}
+
+#[tauri::command]
+async fn ls_deactivate_license(app: AppHandle) -> Result<(), String> {
+    lemonsqueezy::deactivate_license(&app).await
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Load .env file
+    dotenvy::dotenv().ok();
+    
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
             get_system_info,
@@ -221,6 +253,10 @@ pub fn run() {
             get_fast_system_info,
             get_gpu_info,
             get_network_info,
+            ls_get_entitlements,
+            ls_activate_license,
+            ls_refresh_entitlements,
+            ls_deactivate_license,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

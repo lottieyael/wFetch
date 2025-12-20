@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import "./App.css";
 import { t } from "./translations";
 
@@ -21,7 +22,23 @@ function App() {
   });
   const [language, setLanguage] = useState(() => localStorage.getItem("language") || "en");
   const [isExiting, setIsExiting] = useState(false);
+  const [entitlements, setEntitlements] = useState(null);
+  const [entitlementsLoading, setEntitlementsLoading] = useState(true);
+  const [licenseKey, setLicenseKey] = useState("");
+  const [licenseBusy, setLicenseBusy] = useState(false);
+  const [licenseOops, setLicenseOops] = useState(null);
+  const [licenseOk, setLicenseOk] = useState(null);
   const memoryIntervalStarted = useRef(false);
+
+  const checkoutUrl = import.meta.env.VITE_LEMONSQUEEZY_CHECKOUT_URL || "";
+  const devUnlockAllowed = import.meta.env.DEV;
+  const isDevBuild = import.meta.env.TAURI_ENV_DEBUG === "true" || import.meta.env.DEV;
+  const [devUnlocked, setDevUnlocked] = useState(() => {
+    if (!devUnlockAllowed) return false;
+    return localStorage.getItem("devUnlocked") === "true";
+  });
+  const isSubscribed = !!entitlements?.active;
+  const effectiveSubscribed = devUnlocked || isSubscribed;
 
   useEffect(() => {
     localStorage.setItem("language", language);
@@ -75,8 +92,43 @@ function App() {
   }, []);
 
   useEffect(() => {
-    applyTheme(theme);
-  }, [theme]);
+    let alive = true;
+    const load = async () => {
+      try {
+        const cached = await invoke("ls_get_entitlements");
+        if (!alive) return;
+        setEntitlements(cached);
+
+        try {
+          const fresh = await invoke("ls_refresh_entitlements");
+          if (!alive) return;
+          setEntitlements(fresh);
+        } catch {
+          // If refresh fails (offline), keep cached entitlements.
+        }
+      } catch {
+        if (!alive) return;
+        setEntitlements({ active: false });
+      } finally {
+        if (!alive) return;
+        setEntitlementsLoading(false);
+      }
+    };
+    load();
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    applyTheme(effectiveSubscribed ? theme : "system");
+  }, [theme, effectiveSubscribed]);
+
+  useEffect(() => {
+    if (!effectiveSubscribed && theme !== "system") {
+      setTheme("system");
+    }
+  }, [effectiveSubscribed]);
 
   
   const applyTheme = (themeName) => {
@@ -236,6 +288,12 @@ function App() {
 
   const nudgeStory = async () => {
     if (!bits || ticks > 0) return;
+
+    if (entitlementsLoading || !effectiveSubscribed) {
+      setStoryOops(t("app.analyzeLocked", language));
+      return;
+    }
+
     setStoryBusy(true);
     setStoryOops(null);
     setStory(null);
@@ -292,6 +350,108 @@ function App() {
   const diskSlice = disk.total_gb > 0 ? (diskUsed / disk.total_gb) * 100 : 0;
 
   if (currentPage === "settings") {
+    const activateLicense = async () => {
+      const trimmed = licenseKey.trim();
+      if (!trimmed) return;
+
+      if (devUnlockAllowed && trimmed === "bestMilioSupportEver") {
+        localStorage.setItem("devUnlocked", "true");
+        setDevUnlocked(true);
+        setLicenseKey("");
+        setLicenseOk("Developer unlock cheat enabled (dev ver. only). ");
+        setLicenseOops(null);
+        return;
+      }
+
+      if (devUnlockAllowed && trimmed === "worstMilioSupportEver") {
+        localStorage.removeItem("devUnlocked");
+        setDevUnlocked(false);
+        setLicenseKey("");
+        setLicenseOk("Developer unlock cheat disabled (dev ver. only).");
+        setLicenseOops(null);
+        return;
+      }
+
+      setLicenseBusy(true);
+      setLicenseOops(null);
+      setLicenseOk(null);
+      try {
+        const result = await invoke("ls_activate_license", {
+          license_key: trimmed,
+          instance_name: system.hostname,
+        });
+        setEntitlements(result);
+        setLicenseKey("");
+        setLicenseOk(t("settings.subscription.activated", language));
+      } catch (err) {
+        const msg =
+          typeof err === "string"
+            ? err
+            : err?.message || err?.toString() || t("settings.subscription.activationFailed", language);
+        setLicenseOops(msg);
+      } finally {
+        setLicenseBusy(false);
+      }
+    };
+
+    const refreshLicense = async () => {
+      setLicenseBusy(true);
+      setLicenseOops(null);
+      setLicenseOk(null);
+      try {
+        const result = await invoke("ls_refresh_entitlements");
+        setEntitlements(result);
+        setLicenseOk(t("settings.subscription.refreshed", language));
+      } catch (err) {
+        const msg =
+          typeof err === "string"
+            ? err
+            : err?.message || err?.toString() || t("settings.subscription.refreshFailed", language);
+        setLicenseOops(msg);
+      } finally {
+        setLicenseBusy(false);
+      }
+    };
+
+    const deactivateLicense = async () => {
+      if (devUnlocked) {
+        localStorage.removeItem("devUnlocked");
+        setDevUnlocked(false);
+        setLicenseOk("Developer unlock disabled.");
+        setLicenseOops(null);
+        return;
+      }
+
+      setLicenseBusy(true);
+      setLicenseOops(null);
+      setLicenseOk(null);
+      try {
+        await invoke("ls_deactivate_license");
+        setEntitlements({ active: false });
+        setLicenseOk(t("settings.subscription.deactivated", language));
+      } catch (err) {
+        const msg =
+          typeof err === "string"
+            ? err
+            : err?.message || err?.toString() || t("settings.subscription.deactivationFailed", language);
+        setLicenseOops(msg);
+      } finally {
+        setLicenseBusy(false);
+      }
+    };
+
+    const openCheckout = async () => {
+      if (!checkoutUrl) {
+        setLicenseOops(t("settings.subscription.missingCheckoutUrl", language));
+        return;
+      }
+      try {
+        await openUrl(checkoutUrl);
+      } catch {
+        setLicenseOops(t("settings.subscription.openCheckoutFailed", language));
+      }
+    };
+
     return (
       <main className={`container settings-page ${isExiting ? "page-exiting" : ""}`}>
         <header className="header">
@@ -312,8 +472,101 @@ function App() {
         </header>
 
         <div className="info-grid settings-grid">
+          <InfoCard title={t("settings.subscription.title", language)}>
+            <div className="subscription-status">
+              <div className={`status-pill ${isSubscribed ? "active" : "inactive"}`}>
+                {entitlementsLoading
+                  ? t("settings.subscription.loading", language)
+                  : isSubscribed
+                  ? t("settings.subscription.statusActive", language)
+                  : t("settings.subscription.statusInactive", language)}
+              </div>
+
+              {entitlements?.license_key_last4 && (
+                <div className="status-meta">
+                  {t("settings.subscription.licenseEnding", language, {
+                    last4: entitlements.license_key_last4,
+                  })}
+                </div>
+              )}
+
+              {entitlements?.customer_email && <div className="status-meta">{entitlements.customer_email}</div>}
+              {entitlements?.expires_at && (
+                <div className="status-meta">
+                  {t("settings.subscription.expires", language, { date: entitlements.expires_at })}
+                </div>
+              )}
+            </div>
+
+            {licenseOops && <div className="subscription-message error">{licenseOops}</div>}
+            {licenseOk && <div className="subscription-message ok">{licenseOk}</div>}
+
+            {!isSubscribed ? (
+              <div className="license-row">
+                <input
+                  className="license-input"
+                  value={licenseKey}
+                  onChange={(e) => setLicenseKey(e.target.value)}
+                  placeholder={t("settings.subscription.licensePlaceholder", language)}
+                  disabled={licenseBusy}
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
+                />
+              </div>
+            ) : null}
+
+            <div className="license-actions">
+              {!isSubscribed ? (
+                <>
+                  <button
+                    type="button"
+                    className="pill-toggle pill-toggle-active pill-toggle-buy"
+                    disabled={licenseBusy}
+                    onClick={openCheckout}
+                  >
+                    {t("settings.subscription.buy", language)}
+                  </button>
+                  <button
+                    type="button"
+                    className="pill-toggle pill-toggle-dark"
+                    disabled={licenseBusy || !licenseKey.trim()}
+                    onClick={activateLicense}
+                  >
+                    {t("settings.subscription.activate", language)}
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    className="pill-toggle"
+                    disabled={licenseBusy}
+                    onClick={refreshLicense}
+                  >
+                    {t("settings.subscription.refresh", language)}
+                  </button>
+                  <button
+                    type="button"
+                    className="pill-toggle"
+                    disabled={licenseBusy}
+                    onClick={deactivateLicense}
+                  >
+                    {t("settings.subscription.deactivate", language)}
+                  </button>
+                </>
+              )}
+            </div>
+
+            <div className="subscription-help">{t("settings.subscription.help", language)}</div>
+          </InfoCard>
+
           <InfoCard title="Application">
-            <InfoRow label={t("settings.version", language)} value="1.3.2" />
+            <InfoRow label={t("settings.version", language)} value="1.5.2" />
+            <InfoRow
+              label={t("settings.buildMode", language)}
+              value={isDevBuild ? t("settings.buildModeDev", language) : t("settings.buildModeRelease", language)}
+            />
           </InfoCard>
 
           <InfoCard title={t("settings.theme", language)}>
@@ -330,29 +583,33 @@ function App() {
                   type="button"
                   className={`pill-toggle ${theme === "light" ? "pill-toggle-active" : ""}`}
                   onClick={() => setTheme("light")}
+                  disabled={!effectiveSubscribed}
                 >
-                  {t("settings.themes.light", language)}
+                  {t("settings.themes.light", language)}{!effectiveSubscribed ? " 🔒" : ""}
                 </button>
                 <button
                   type="button"
                   className={`pill-toggle ${theme === "dark" ? "pill-toggle-active" : ""}`}
                   onClick={() => setTheme("dark")}
+                  disabled={!effectiveSubscribed}
                 >
-                  {t("settings.themes.dark", language)}
+                  {t("settings.themes.dark", language)}{!effectiveSubscribed ? " 🔒" : ""}
                 </button>
                 <button
                   type="button"
                   className={`pill-toggle ${theme === "cherry" ? "pill-toggle-active" : ""}`}
                   onClick={() => setTheme("cherry")}
+                  disabled={!effectiveSubscribed}
                 >
-                  {t("settings.themes.cherry", language)}
+                  {t("settings.themes.cherry", language)}{!effectiveSubscribed ? " 🔒" : ""}
                 </button>
                 <button
                   type="button"
                   className={`pill-toggle ${theme === "midnight" ? "pill-toggle-active" : ""}`}
                   onClick={() => setTheme("midnight")}
+                  disabled={!effectiveSubscribed}
                 >
-                  {t("settings.themes.midnight", language)}
+                  {t("settings.themes.midnight", language)}{!effectiveSubscribed ? " 🔒" : ""}
                 </button>
               </div>
             </div>
@@ -419,12 +676,14 @@ function App() {
         <button
           className="ai-button"
           onClick={nudgeStory}
-          disabled={storyBusy || ticks > 0}
+          disabled={storyBusy || ticks > 0 || entitlementsLoading || !effectiveSubscribed}
         >
           {storyBusy
             ? t("app.analyzing", language, { percent: analyzePercent })
             : ticks > 0
             ? t("app.cooldown", language, { seconds: ticks })
+            : entitlementsLoading || !effectiveSubscribed
+            ? t("app.analyzeLocked", language)
             : t("app.analyzeButton", language)}
         </button>
       </header>

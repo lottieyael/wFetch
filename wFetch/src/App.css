@@ -737,6 +737,102 @@ html, body {
   gap: 8px;
 }
 
+.subscription-status {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: fit-content;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--card-border);
+  background: var(--card-bg);
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.status-pill.active {
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 50%, var(--color-tertiary) 100%);
+  border-color: transparent;
+  color: #ffffff;
+  box-shadow: 0 4px 12px var(--accent-shadow);
+}
+
+.status-pill.inactive {
+  opacity: 0.85;
+}
+
+.status-meta {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.subscription-message {
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--card-border);
+  background: rgba(255, 255, 255, 0.06);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.subscription-message.error {
+  border-color: rgba(255, 59, 48, 0.35);
+  background: rgba(255, 59, 48, 0.10);
+}
+
+.subscription-message.ok {
+  border-color: rgba(52, 199, 89, 0.35);
+  background: rgba(52, 199, 89, 0.10);
+}
+
+.license-row {
+  margin-top: 8px;
+}
+
+.license-input {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--card-border);
+  background: var(--card-bg);
+  color: var(--text-primary);
+  font-size: 13px;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  transition: all 0.2s ease;
+}
+
+.license-input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px var(--focus-ring);
+}
+
+.license-input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.license-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.subscription-help {
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
 .pill-toggle {
   border-radius: 999px;
   padding: 6px 14px;
@@ -751,6 +847,11 @@ html, body {
   transition: all 0.2s ease;
 }
 
+.pill-toggle:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .pill-toggle:hover {
   background: rgba(255, 255, 255, 0.1);
   border-color: rgba(255, 255, 255, 0.25);
@@ -761,6 +862,19 @@ html, body {
   border-color: transparent;
   color: #ffffff;
   box-shadow: 0 4px 12px var(--accent-shadow);
+}
+
+/* Highlighted Buy button variant (uses active gradient but slightly stronger) */
+.pill-toggle-buy {
+  box-shadow: 0 6px 20px rgba(0, 122, 255, 0.28);
+}
+
+/* Darker Activate button when shown alongside Buy */
+.pill-toggle-dark {
+  background: rgba(0, 0, 0, 0.18);
+  border-color: rgba(255, 255, 255, 0.06);
+  color: var(--text-primary);
+  box-shadow: none;
 }
 
 .setting-select {
