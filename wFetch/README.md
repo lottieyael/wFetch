@@ -45,6 +45,11 @@ pnpm tauri dev
 pnpm tauri build
 ```
 
+After building, the installer will be located at:
+- **Windows**: `src-tauri/target/release/bundle/msi/` (`.msi` installer) or `src-tauri/target/release/bundle/nsis/` (`.exe` installer)
+- **macOS**: `src-tauri/target/release/bundle/dmg/` (`.dmg` file) or `src-tauri/target/release/bundle/macos/` (`.app` bundle)
+- **Linux**: `src-tauri/target/release/bundle/deb/` (`.deb` package) or `src-tauri/target/release/bundle/appimage/` (`.AppImage` file)
+
 ## Environment Variables
 
 - `DEEPSEEK_API_KEY`: Your DeepSeek API key (required for AI analysis feature)
