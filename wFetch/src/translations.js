@@ -50,6 +50,15 @@ const translations = {
         cherry: "Cherry Blush",
         midnight: "Midnight Coding",
       },
+      monitor: {
+        title: "Background Monitor",
+        enable: "Enable Background Monitoring",
+        enableHelp: "Lightweight process monitoring (uses < 5MB RAM)",
+        sensitivity: "Sensitivity Threshold",
+        sensitivityHelp: "Trigger snapshot when CPU usage exceeds this %",
+        viewIncidents: "View Incidents",
+        noIncidents: "No high usage incidents detected yet.",
+      },
     },
     cards: {
       os: "Operating System",

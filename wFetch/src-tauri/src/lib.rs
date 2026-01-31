@@ -1,8 +1,11 @@
 mod fetch;
 mod lemonsqueezy;
+mod monitor;
 
 use serde::{Deserialize, Serialize};
 use tauri::AppHandle;
+use std::sync::{Arc, Mutex};
+use monitor::{Monitor, MonitorState};
 
 #[derive(Serialize, Deserialize)]
 pub struct SystemInfo {
@@ -246,6 +249,7 @@ pub fn run() {
     dotenvy::dotenv().ok();
     
     tauri::Builder::default()
+        .manage(Monitor(Arc::new(Mutex::new(MonitorState::new()))))
         .invoke_handler(tauri::generate_handler![
             get_system_info,
             get_memory_info,
@@ -257,6 +261,9 @@ pub fn run() {
             ls_activate_license,
             ls_refresh_entitlements,
             ls_deactivate_license,
+            monitor::set_monitor_state,
+            monitor::set_monitor_sensitivity,
+            monitor::get_monitor_incidents,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

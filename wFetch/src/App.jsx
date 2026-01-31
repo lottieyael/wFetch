@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import "./App.css";
 import { t } from "./translations";
@@ -28,7 +29,12 @@ function App() {
   const [licenseBusy, setLicenseBusy] = useState(false);
   const [licenseOops, setLicenseOops] = useState(null);
   const [licenseOk, setLicenseOk] = useState(null);
+  const [monitorEnabled, setMonitorEnabled] = useState(() => localStorage.getItem("monitorEnabled") === "true");
+  const [monitorSensitivity, setMonitorSensitivity] = useState(() => parseInt(localStorage.getItem("monitorSensitivity") || "85", 10));
+  const [incidents, setIncidents] = useState([]);
   const memoryIntervalStarted = useRef(false);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [settingsSection, setSettingsSection] = useState(null);
 
   const checkoutUrl = import.meta.env.VITE_LEMONSQUEEZY_CHECKOUT_URL || "";
   const devUnlockAllowed = import.meta.env.DEV;
@@ -123,6 +129,30 @@ function App() {
   useEffect(() => {
     applyTheme(effectiveSubscribed ? theme : "system");
   }, [theme, effectiveSubscribed]);
+
+  useEffect(() => {
+    localStorage.setItem("monitorEnabled", monitorEnabled.toString());
+    invoke("set_monitor_state", { enabled: monitorEnabled }).catch(() => {});
+  }, [monitorEnabled]);
+
+  useEffect(() => {
+    localStorage.setItem("monitorSensitivity", monitorSensitivity.toString());
+    invoke("set_monitor_sensitivity", { threshold: monitorSensitivity }).catch(() => {});
+  }, [monitorSensitivity]);
+
+  useEffect(() => {
+    if (!monitorEnabled) return;
+    
+    invoke("get_monitor_incidents").then(setIncidents).catch(() => {});
+    
+    const unlistenPromise = listen("monitor-incident", (event) => {
+      setIncidents(prev => [event.payload, ...prev].slice(0, 10));
+    });
+    
+    return () => {
+      unlistenPromise.then(unlisten => unlisten());
+    };
+  }, [monitorEnabled]);
 
   useEffect(() => {
     if (!effectiveSubscribed && theme !== "system") {
@@ -349,7 +379,7 @@ function App() {
   const diskUsed = disk.total_gb - disk.free_gb;
   const diskSlice = disk.total_gb > 0 ? (diskUsed / disk.total_gb) * 100 : 0;
 
-  if (currentPage === "settings") {
+  if (["settings", "subscription", "monitor"].includes(currentPage)) {
     const activateLicense = async () => {
       const trimmed = licenseKey.trim();
       if (!trimmed) return;
@@ -452,6 +482,10 @@ function App() {
       }
     };
 
+    let pageTitle = t("settings.title", language);
+    if (currentPage === "subscription") pageTitle = t("settings.subscription.title", language);
+    if (currentPage === "monitor") pageTitle = t("settings.monitor.title", language);
+
     return (
       <main className={`container settings-page ${isExiting ? "page-exiting" : ""}`}>
         <header className="header">
@@ -464,194 +498,268 @@ function App() {
           </button>
           
           <div className="header-content">
-            <h1 className="app-title">{t("settings.title", language)}</h1>
-            <p className="app-subtitle">{t("settings.subtitle", language)}</p>
+            <h1 className="app-title">{pageTitle}</h1>
+            {/*<p className="app-subtitle">{t("settings.subtitle", language)}</p>*/}
           </div>
           
           <div style={{ width: "110px" }}></div>
         </header>
 
-        <div className="info-grid settings-grid">
-          <InfoCard title={t("settings.subscription.title", language)}>
-            <div className="subscription-status">
-              <div className={`status-pill ${isSubscribed ? "active" : "inactive"}`}>
-                {entitlementsLoading
-                  ? t("settings.subscription.loading", language)
-                  : isSubscribed
-                  ? t("settings.subscription.statusActive", language)
-                  : t("settings.subscription.statusInactive", language)}
+        <div className={`info-grid settings-grid ${currentPage !== "settings" ? "single-card-page" : ""}`}>
+          {currentPage === "subscription" && (
+            <InfoCard id="settings-subscription" title={t("settings.subscription.title", language)}>
+              <div className="subscription-status">
+                <div className={`status-pill ${isSubscribed ? "active" : "inactive"}`}>
+                  {entitlementsLoading
+                    ? t("settings.subscription.loading", language)
+                    : isSubscribed
+                    ? t("settings.subscription.statusActive", language)
+                    : t("settings.subscription.statusInactive", language)}
+                </div>
+
+                {entitlements?.license_key_last4 && (
+                  <div className="status-meta">
+                    {t("settings.subscription.licenseEnding", language, {
+                      last4: entitlements.license_key_last4,
+                    })}
+                  </div>
+                )}
+
+                {entitlements?.customer_email && <div className="status-meta">{entitlements.customer_email}</div>}
+                {entitlements?.expires_at && (
+                  <div className="status-meta">
+                    {t("settings.subscription.expires", language, { date: entitlements.expires_at })}
+                  </div>
+                )}
               </div>
 
-              {entitlements?.license_key_last4 && (
-                <div className="status-meta">
-                  {t("settings.subscription.licenseEnding", language, {
-                    last4: entitlements.license_key_last4,
-                  })}
-                </div>
-              )}
+              {licenseOops && <div className="subscription-message error">{licenseOops}</div>}
+              {licenseOk && <div className="subscription-message ok">{licenseOk}</div>}
 
-              {entitlements?.customer_email && <div className="status-meta">{entitlements.customer_email}</div>}
-              {entitlements?.expires_at && (
-                <div className="status-meta">
-                  {t("settings.subscription.expires", language, { date: entitlements.expires_at })}
-                </div>
-              )}
-            </div>
-
-            {licenseOops && <div className="subscription-message error">{licenseOops}</div>}
-            {licenseOk && <div className="subscription-message ok">{licenseOk}</div>}
-
-            {!isSubscribed ? (
-              <div className="license-row">
-                <input
-                  className="license-input"
-                  value={licenseKey}
-                  onChange={(e) => setLicenseKey(e.target.value)}
-                  placeholder={t("settings.subscription.licensePlaceholder", language)}
-                  disabled={licenseBusy}
-                  autoCapitalize="none"
-                  autoCorrect="off"
-                  spellCheck={false}
-                />
-              </div>
-            ) : null}
-
-            <div className="license-actions">
               {!isSubscribed ? (
-                <>
-                  <button
-                    type="button"
-                    className="pill-toggle pill-toggle-active pill-toggle-buy"
-                    disabled={licenseBusy}
-                    onClick={openCheckout}
-                  >
-                    {t("settings.subscription.buy", language)}
-                  </button>
-                  <button
-                    type="button"
-                    className="pill-toggle pill-toggle-dark"
-                    disabled={licenseBusy || !licenseKey.trim()}
-                    onClick={activateLicense}
-                  >
-                    {t("settings.subscription.activate", language)}
-                  </button>
-                </>
-              ) : (
-                <>
-                  <button
-                    type="button"
-                    className="pill-toggle"
-                    disabled={licenseBusy}
-                    onClick={refreshLicense}
-                  >
-                    {t("settings.subscription.refresh", language)}
-                  </button>
-                  <button
-                    type="button"
-                    className="pill-toggle"
-                    disabled={licenseBusy}
-                    onClick={deactivateLicense}
-                  >
-                    {t("settings.subscription.deactivate", language)}
-                  </button>
-                </>
-              )}
-            </div>
-
-            <div className="subscription-help">{t("settings.subscription.help", language)}</div>
-          </InfoCard>
-
-          <InfoCard title="Application">
-            <InfoRow label={t("settings.version", language)} value="1.5.2" />
-            <InfoRow
-              label={t("settings.buildMode", language)}
-              value={isDevBuild ? t("settings.buildModeDev", language) : t("settings.buildModeRelease", language)}
-            />
-          </InfoCard>
-
-          <InfoCard title={t("settings.theme", language)}>
-            <div className="setting-row">
-              <div className="setting-control">
-                <button
-                  type="button"
-                  className={`pill-toggle ${theme === "system" ? "pill-toggle-active" : ""}`}
-                  onClick={() => setTheme("system")}
-                >
-                  {t("settings.themes.system", language)}
-                </button>
-                <button
-                  type="button"
-                  className={`pill-toggle ${theme === "light" ? "pill-toggle-active" : ""}`}
-                  onClick={() => setTheme("light")}
-                  disabled={!effectiveSubscribed}
-                >
-                  {t("settings.themes.light", language)}{!effectiveSubscribed ? " 🔒" : ""}
-                </button>
-                <button
-                  type="button"
-                  className={`pill-toggle ${theme === "dark" ? "pill-toggle-active" : ""}`}
-                  onClick={() => setTheme("dark")}
-                  disabled={!effectiveSubscribed}
-                >
-                  {t("settings.themes.dark", language)}{!effectiveSubscribed ? " 🔒" : ""}
-                </button>
-                <button
-                  type="button"
-                  className={`pill-toggle ${theme === "cherry" ? "pill-toggle-active" : ""}`}
-                  onClick={() => setTheme("cherry")}
-                  disabled={!effectiveSubscribed}
-                >
-                  {t("settings.themes.cherry", language)}{!effectiveSubscribed ? " 🔒" : ""}
-                </button>
-                <button
-                  type="button"
-                  className={`pill-toggle ${theme === "midnight" ? "pill-toggle-active" : ""}`}
-                  onClick={() => setTheme("midnight")}
-                  disabled={!effectiveSubscribed}
-                >
-                  {t("settings.themes.midnight", language)}{!effectiveSubscribed ? " 🔒" : ""}
-                </button>
-              </div>
-            </div>
-            <div className="setting-row">
-              <div className="setting-label">
-                {t("settings.saveThemePreference", language)}
-                <span className="setting-help">{t("settings.saveThemeHelp", language)}</span>
-              </div>
-              <div className="setting-control">
-                <label className="toggle-switch">
+                <div className="license-row">
                   <input
-                    type="checkbox"
-                    checked={saveTheme}
-                    onChange={(e) => setSaveTheme(e.target.checked)}
+                    className="license-input"
+                    value={licenseKey}
+                    onChange={(e) => setLicenseKey(e.target.value)}
+                    placeholder={t("settings.subscription.licensePlaceholder", language)}
+                    disabled={licenseBusy}
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
                   />
-                  <span className="toggle-slider"></span>
-                </label>
-              </div>
-            </div>
-          </InfoCard>
+                </div>
+              ) : null}
 
-          <InfoCard title={t("settings.language", language)}>
-            <div className="setting-row">
-              <div className="setting-label">
-                {t("settings.language", language)}
-                <span className="setting-help">{t("settings.languageHelp", language)}</span>
+              <div className="license-actions">
+                {!isSubscribed ? (
+                  <>
+                    <button
+                      type="button"
+                      className="pill-toggle pill-toggle-active pill-toggle-buy"
+                      disabled={licenseBusy}
+                      onClick={openCheckout}
+                    >
+                      {t("settings.subscription.buy", language)}
+                    </button>
+                    <button
+                      type="button"
+                      className="pill-toggle pill-toggle-dark"
+                      disabled={licenseBusy || !licenseKey.trim()}
+                      onClick={activateLicense}
+                    >
+                      {t("settings.subscription.activate", language)}
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      className="pill-toggle"
+                      disabled={licenseBusy}
+                      onClick={refreshLicense}
+                    >
+                      {t("settings.subscription.refresh", language)}
+                    </button>
+                    <button
+                      type="button"
+                      className="pill-toggle"
+                      disabled={licenseBusy}
+                      onClick={deactivateLicense}
+                    >
+                      {t("settings.subscription.deactivate", language)}
+                    </button>
+                  </>
+                )}
               </div>
-              <div className="setting-control">
-                <select
-                  className="setting-select"
-                  value={language}
-                  onChange={(e) => setLanguage(e.target.value)}
-                >
-                  <option value="en">English</option>
-                  <option value="es">Español</option>
-                  <option value="fr">Français</option>
-                  <option value="hu">Magyar</option>
-                  <option value="zh">中文</option>
-                </select>
+
+              <div className="subscription-help">{t("settings.subscription.help", language)}</div>
+            </InfoCard>
+          )}
+
+          {currentPage === "monitor" && (
+            <InfoCard id="settings-monitor" title={t("settings.monitor.title", language)}>
+              <div className="setting-row">
+                <div className="setting-label">
+                  {t("settings.monitor.enable", language)}
+                  <span className="setting-help">{t("settings.monitor.enableHelp", language)}</span>
+                </div>
+                <div className="setting-control">
+                  <label className="toggle-switch">
+                    <input
+                      type="checkbox"
+                      checked={monitorEnabled}
+                      onChange={(e) => setMonitorEnabled(e.target.checked)}
+                    />
+                    <span className="toggle-slider"></span>
+                  </label>
+                </div>
               </div>
-            </div>
-          </InfoCard>
+              
+              {monitorEnabled && (
+                <div className="setting-row">
+                  <div className="setting-label">
+                    {t("settings.monitor.sensitivity", language)} ({monitorSensitivity}%)
+                    <span className="setting-help">{t("settings.monitor.sensitivityHelp", language)}</span>
+                  </div>
+                  <div className="setting-control" style={{ width: "50%" }}>
+                    <input 
+                      type="range" 
+                      min="50" 
+                      max="99" 
+                      value={monitorSensitivity} 
+                      onChange={(e) => setMonitorSensitivity(parseInt(e.target.value, 10))}
+                      className="sensitivity-slider"
+                      style={{ width: "100%" }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {monitorEnabled && incidents.length > 0 && (
+                <div className="incidents-list">
+                  <div className="setting-label" style={{marginBottom: '10px'}}>{t("settings.monitor.viewIncidents", language)}</div>
+                  {incidents.map(inc => (
+                    <div key={inc.id} className="incident-item">
+                      <div className="incident-header">
+                        <span>{new Date(inc.timestamp * 1000).toLocaleTimeString()}</span>
+                        <span className="incident-cpu">{inc.total_cpu.toFixed(1)}% CPU</span>
+                      </div>
+                      <div className="incident-processes">
+                        {inc.processes.slice(0, 3).map(p => (
+                          <div key={p.pid} className="incident-process">
+                            <span>{p.name}</span>
+                            <span>{p.cpu_percent.toFixed(1)}%</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {monitorEnabled && incidents.length === 0 && (
+                <div className="setting-row">
+                  <div className="setting-help">{t("settings.monitor.noIncidents", language)}</div>
+                </div>
+              )}
+            </InfoCard>
+          )}
+
+          {currentPage === "settings" && (
+            <>
+              <InfoCard id="settings-application" title="Application">
+                <InfoRow label={t("settings.version", language)} value="1.5.2" />
+                <InfoRow
+                  label={t("settings.buildMode", language)}
+                  value={isDevBuild ? t("settings.buildModeDev", language) : t("settings.buildModeRelease", language)}
+                />
+              </InfoCard>
+
+              <InfoCard id="settings-theme" title={t("settings.theme", language)}>
+                <div className="setting-row">
+                  <div className="setting-control">
+                    <button
+                      type="button"
+                      className={`pill-toggle ${theme === "system" ? "pill-toggle-active" : ""}`}
+                      onClick={() => setTheme("system")}
+                    >
+                      {t("settings.themes.system", language)}
+                    </button>
+                    <button
+                      type="button"
+                      className={`pill-toggle ${theme === "light" ? "pill-toggle-active" : ""}`}
+                      onClick={() => setTheme("light")}
+                      disabled={!effectiveSubscribed}
+                    >
+                      {t("settings.themes.light", language)}{!effectiveSubscribed ? " 🔒" : ""}
+                    </button>
+                    <button
+                      type="button"
+                      className={`pill-toggle ${theme === "dark" ? "pill-toggle-active" : ""}`}
+                      onClick={() => setTheme("dark")}
+                      disabled={!effectiveSubscribed}
+                    >
+                      {t("settings.themes.dark", language)}{!effectiveSubscribed ? " 🔒" : ""}
+                    </button>
+                    <button
+                      type="button"
+                      className={`pill-toggle ${theme === "cherry" ? "pill-toggle-active" : ""}`}
+                      onClick={() => setTheme("cherry")}
+                      disabled={!effectiveSubscribed}
+                    >
+                      {t("settings.themes.cherry", language)}{!effectiveSubscribed ? " 🔒" : ""}
+                    </button>
+                    <button
+                      type="button"
+                      className={`pill-toggle ${theme === "midnight" ? "pill-toggle-active" : ""}`}
+                      onClick={() => setTheme("midnight")}
+                      disabled={!effectiveSubscribed}
+                    >
+                      {t("settings.themes.midnight", language)}{!effectiveSubscribed ? " 🔒" : ""}
+                    </button>
+                  </div>
+                </div>
+                <div className="setting-row">
+                  <div className="setting-label">
+                    {t("settings.saveThemePreference", language)}
+                    <span className="setting-help">{t("settings.saveThemeHelp", language)}</span>
+                  </div>
+                  <div className="setting-control">
+                    <label className="toggle-switch">
+                      <input
+                        type="checkbox"
+                        checked={saveTheme}
+                        onChange={(e) => setSaveTheme(e.target.checked)}
+                      />
+                      <span className="toggle-slider"></span>
+                    </label>
+                  </div>
+                </div>
+              </InfoCard>
+
+              <InfoCard id="settings-language" title={t("settings.language", language)}>
+                <div className="setting-row">
+                  <div className="setting-label">
+                    {t("settings.language", language)}
+                    <span className="setting-help">{t("settings.languageHelp", language)}</span>
+                  </div>
+                  <div className="setting-control">
+                    <select
+                      className="setting-select"
+                      value={language}
+                      onChange={(e) => setLanguage(e.target.value)}
+                    >
+                      <option value="en">English</option>
+                      <option value="es">Español</option>
+                      <option value="fr">Français</option>
+                      <option value="hu">Magyar</option>
+                      <option value="zh">中文</option>
+                    </select>
+                  </div>
+                </div>
+              </InfoCard>
+            </>
+          )}
         </div>
       </main>
     );
@@ -660,15 +768,38 @@ function App() {
   return (
     <main className={`container ${isExiting ? "page-exiting" : ""}`}>
       <header className="header">
-        <button
-          type="button"
-          className="settings-button"
-          onClick={() => navigateTo("settings")}
-          aria-label="Open settings"
-        >
-          <span className="settings-icon">⚙️</span>
-          <span className="settings-label">Settings</span>
-        </button>
+        <div className="settings-dropdown-container">
+          <button
+            type="button"
+            className="settings-button"
+            onClick={() => setDropdownOpen(!dropdownOpen)}
+            aria-label="Open settings menu"
+          >
+            <span className="settings-label">Extras</span>
+          </button>
+          {dropdownOpen && (
+            <div className="settings-dropdown-menu">
+              <button 
+                className="settings-dropdown-item"
+                onClick={() => { navigateTo("settings"); setDropdownOpen(false); }}
+              >
+                Settings
+              </button>
+              <button 
+                className="settings-dropdown-item"
+                onClick={() => { navigateTo("subscription"); setDropdownOpen(false); }}
+              >
+                Subscription
+              </button>
+              <button 
+                className="settings-dropdown-item"
+                onClick={() => { navigateTo("monitor"); setDropdownOpen(false); }}
+              >
+                Background Monitor
+              </button>
+            </div>
+          )}
+        </div>
         <div className="header-content">
           <h1 className="app-title">{t("app.title", language)}</h1>
           <p className="app-subtitle">{t("app.subtitle", language)}</p>
@@ -810,9 +941,9 @@ function App() {
   );
 }
 
-function InfoCard({ title, children }) {
+function InfoCard({ title, children, id }) {
   return (
-    <div className="info-card">
+    <div className="info-card" id={id}>
       <div className="card-header">
         <h2 className="card-title">{title}</h2>
       </div>

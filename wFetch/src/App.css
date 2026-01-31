@@ -96,7 +96,6 @@ html, body {
 }
 
 /* Glass button base styles */
-.settings-button,
 .back-button {
   padding: 8px 14px;
   border-radius: 999px;
@@ -110,31 +109,49 @@ html, body {
   font-weight: 500;
   box-shadow: 0 8px 24px var(--shadow-color);
   transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  white-space: nowrap;
+  min-width: 110px;
 }
 
 .settings-button {
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 50%, var(--color-tertiary) 100%);
+  background-size: 200% 200%;
+  animation: titleGradient 6s ease-in-out infinite;
+  border: none;
+  border-radius: 12px;
+  padding: 12px 24px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #ffffff;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 16px var(--shadow-color, rgba(0,0,0,0.3));
+  position: relative;
+  overflow: hidden;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
 }
 
-.back-button {
-  white-space: nowrap;
-  min-width: 110px;
-}
-
-.settings-button:hover,
 .back-button:hover {
   background: rgba(255, 255, 255, 0.14);
   border-color: rgba(255, 255, 255, 0.25);
   transform: translateY(-1px);
 }
 
-.settings-button:active,
+.settings-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px var(--shadow-color, rgba(0,0,0,0.35));
+}
+
 .back-button:active {
   transform: translateY(0);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+}
+
+.settings-button:active {
+  transform: translateY(0);
 }
 
 .settings-icon {
@@ -142,7 +159,7 @@ html, body {
 }
 
 .settings-label {
-  font-size: 13px;
+  font-size: inherit;
 }
 
 @media (max-width: 480px) {
@@ -1141,3 +1158,102 @@ html, body {
     font-size: 14px;
   }
 }
+.incidents-list {
+  margin-top: 15px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 8px;
+  padding: 10px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.incident-item {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 6px;
+  padding: 8px;
+  margin-bottom: 8px;
+}
+
+.incident-header {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.9em;
+  color: var(--text-secondary);
+  margin-bottom: 5px;
+}
+
+.incident-cpu {
+  color: var(--color-primary);
+  font-weight: bold;
+}
+
+.incident-processes {
+  font-size: 0.85em;
+}
+
+.incident-process {
+  display: flex;
+  justify-content: space-between;
+  padding: 2px 0;
+}
+
+/* Settings Dropdown */
+.settings-dropdown-container {
+  position: relative;
+  display: inline-block;
+}
+
+.settings-dropdown-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 8px;
+  background: var(--card-bg);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid var(--card-border);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px var(--shadow-color);
+  padding: 8px;
+  min-width: 200px;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.settings-dropdown-item {
+  padding: 10px 16px;
+  border-radius: 8px;
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.settings-dropdown-item:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.single-card-page {
+  display: flex;
+  justify-content: center;
+}
+
+.single-card-page .info-card {
+  width: 100%;
+  max-width: 800px;
+  min-height: 60vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.single-card-page .card-content {
+  flex: 1;
+}
+
+
