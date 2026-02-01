@@ -1,11 +1,20 @@
 mod fetch;
+mod ps;
+mod discovery;
+mod diagnostics;
+mod export_excel;
 mod lemonsqueezy;
 mod monitor;
 
 use serde::{Deserialize, Serialize};
 use tauri::AppHandle;
+use tauri::Manager;
 use std::sync::{Arc, Mutex};
 use monitor::{Monitor, MonitorState};
+
+use std::path::PathBuf;
+use std::time::Duration;
+use tokio::sync::Semaphore;
 
 #[derive(Serialize, Deserialize)]
 pub struct SystemInfo {
@@ -48,6 +57,167 @@ pub struct GpuInfo {
 pub struct DiskInfo {
     total_gb: f64,
     free_gb: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NetworkScanOptions {
+    pub max_hosts: Option<u32>,
+    pub include_neighbors: Option<bool>,
+    pub ping_sweep: Option<bool>,
+    pub per_host_timeout_ms: Option<u32>,
+    pub concurrency: Option<u32>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ScanFailure {
+    pub ip: String,
+    pub error: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NetworkScanExportResult {
+    pub output_path: String,
+    pub discovered_hosts: u32,
+    pub scanned_hosts: u32,
+    pub succeeded: u32,
+    pub failed: u32,
+    pub failures: Vec<ScanFailure>,
+}
+
+#[tauri::command]
+async fn scan_network_and_export_excel(
+    app: AppHandle,
+    options: Option<NetworkScanOptions>,
+) -> Result<NetworkScanExportResult, String> {
+    let options = options.unwrap_or(NetworkScanOptions {
+        max_hosts: Some(128),
+        include_neighbors: Some(true),
+        ping_sweep: Some(true),
+        per_host_timeout_ms: Some(8000),
+        concurrency: Some(16),
+    });
+
+    let discovery_opts = discovery::DiscoveryOptions {
+        max_hosts: options.max_hosts,
+        include_neighbors: options.include_neighbors,
+        ping_sweep: options.ping_sweep,
+    };
+
+    let discovered = tokio::task::spawn_blocking(move || {
+        discovery::discover_hosts(discovery_opts, Duration::from_secs(45))
+    })
+    .await
+    .map_err(|e| format!("Discovery join error: {e}"))??;
+
+    let ips: Vec<String> = discovered.into_iter().map(|h| h.ip).collect();
+    let discovered_hosts = ips.len() as u32;
+
+    if ips.is_empty() {
+        return Err(
+            "No LAN hosts discovered. Try again after generating some LAN traffic, or ensure the network allows discovery (firewall/ICMP/WMI)."
+                .to_string(),
+        );
+    }
+
+    let per_host_timeout = Duration::from_millis(options.per_host_timeout_ms.unwrap_or(8000) as u64);
+    let concurrency = options.concurrency.unwrap_or(16).max(1) as usize;
+
+    let sem = Arc::new(Semaphore::new(concurrency));
+    let mut handles = Vec::with_capacity(ips.len());
+    for ip in ips {
+        let sem = sem.clone();
+        let ip_clone = ip.clone();
+        let ip_for_err = ip.clone();
+        handles.push(tokio::spawn(async move {
+            let _permit = sem
+                .acquire()
+                .await
+                .map_err(|_| "Semaphore closed".to_string())?;
+            let row = tokio::task::spawn_blocking(move || {
+                diagnostics::diagnose_host(&ip_clone, per_host_timeout)
+            })
+            .await
+            .map_err(|e| format!("Diagnostics join error for {ip_for_err}: {e}"))?;
+            Ok::<_, String>(row)
+        }));
+    }
+
+    let mut rows = Vec::new();
+    for h in handles {
+        match h.await {
+            Ok(Ok(row)) => rows.push(row),
+            Ok(Err(e)) => rows.push(diagnostics::RemoteSystemInfo {
+                ip: "unknown".to_string(),
+                hostname: None,
+                username: None,
+                os: None,
+                cpu: None,
+                logical_processors: None,
+                memory_total_gb: None,
+                memory_free_gb: None,
+                disk_total_gb: None,
+                disk_free_gb: None,
+                gpus: vec![],
+                error: Some(e),
+            }),
+            Err(e) => rows.push(diagnostics::RemoteSystemInfo {
+                ip: "unknown".to_string(),
+                hostname: None,
+                username: None,
+                os: None,
+                cpu: None,
+                logical_processors: None,
+                memory_total_gb: None,
+                memory_free_gb: None,
+                disk_total_gb: None,
+                disk_free_gb: None,
+                gpus: vec![],
+                error: Some(format!("Task join error: {e}")),
+            }),
+        }
+    }
+
+    let scanned_hosts = rows.len() as u32;
+    let mut failures = Vec::new();
+    let mut succeeded = 0u32;
+    let mut failed = 0u32;
+    for r in &rows {
+        if let Some(err) = &r.error {
+            failed += 1;
+            failures.push(ScanFailure {
+                ip: r.ip.clone(),
+                error: err.clone(),
+            });
+        } else {
+            succeeded += 1;
+        }
+    }
+
+    // Save to Desktop by default.
+    let desktop = app
+        .path()
+        .resolve(".", tauri::path::BaseDirectory::Desktop)
+        .map_err(|e| format!("Failed to resolve Desktop directory: {e}"))?;
+    let ts = chrono::Local::now().format("%Y%m%d_%H%M%S").to_string();
+    let filename = format!("wfetch_network_diagnostics_{ts}.xlsx");
+    let out_path: PathBuf = desktop.join(filename);
+
+    let out_path_clone = out_path.clone();
+    let rows_clone = rows.clone();
+    tokio::task::spawn_blocking(move || {
+        export_excel::write_diagnostics_xlsx(&out_path_clone, &rows_clone)
+    })
+    .await
+    .map_err(|e| format!("Export join error: {e}"))??;
+
+    Ok(NetworkScanExportResult {
+        output_path: out_path.to_string_lossy().to_string(),
+        discovered_hosts,
+        scanned_hosts,
+        succeeded,
+        failed,
+        failures,
+    })
 }
 
 #[tauri::command]
@@ -257,6 +427,7 @@ pub fn run() {
             get_fast_system_info,
             get_gpu_info,
             get_network_info,
+            scan_network_and_export_excel,
             ls_get_entitlements,
             ls_activate_license,
             ls_refresh_entitlements,

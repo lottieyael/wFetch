@@ -36,6 +36,10 @@ function App() {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [settingsSection, setSettingsSection] = useState(null);
 
+  const [netDiagBusy, setNetDiagBusy] = useState(false);
+  const [netDiagOops, setNetDiagOops] = useState(null);
+  const [netDiagResult, setNetDiagResult] = useState(null);
+
   const checkoutUrl = import.meta.env.VITE_LEMONSQUEEZY_CHECKOUT_URL || "";
   const devUnlockAllowed = import.meta.env.DEV;
   const isDevBuild = import.meta.env.TAURI_ENV_DEBUG === "true" || import.meta.env.DEV;
@@ -673,6 +677,57 @@ function App() {
                   label={t("settings.buildMode", language)}
                   value={isDevBuild ? t("settings.buildModeDev", language) : t("settings.buildModeRelease", language)}
                 />
+              </InfoCard>
+
+              <InfoCard id="settings-admin-network" title="Admin: Network Diagnostics">
+                <div className="subscription-help" style={{ marginBottom: "10px" }}>
+                  Runs Windows remote diagnostics across discovered LAN hosts and exports an Excel report to your Desktop.
+                  Remote access requires WMI/CIM over DCOM permissions and may fail on locked-down machines.
+                </div>
+
+                {netDiagOops && <div className="subscription-message error">{netDiagOops}</div>}
+                {netDiagResult && (
+                  <div className="subscription-message ok" style={{ whiteSpace: "pre-wrap" }}>
+                    Exported: {netDiagResult.output_path}
+                    {"\n"}Discovered: {netDiagResult.discovered_hosts} | Scanned: {netDiagResult.scanned_hosts}
+                    {"\n"}Succeeded: {netDiagResult.succeeded} | Failed: {netDiagResult.failed}
+                  </div>
+                )}
+
+                <div className="license-actions">
+                  <button
+                    type="button"
+                    className="pill-toggle"
+                    disabled={netDiagBusy}
+                    onClick={async () => {
+                      setNetDiagBusy(true);
+                      setNetDiagOops(null);
+                      setNetDiagResult(null);
+                      try {
+                        const result = await invoke("scan_network_and_export_excel", {
+                          options: {
+                            max_hosts: 128,
+                            include_neighbors: true,
+                            ping_sweep: true,
+                            per_host_timeout_ms: 8000,
+                            concurrency: 16,
+                          },
+                        });
+                        setNetDiagResult(result);
+                      } catch (err) {
+                        const msg =
+                          typeof err === "string"
+                            ? err
+                            : err?.message || err?.toString() || "Network diagnostics failed.";
+                        setNetDiagOops(msg);
+                      } finally {
+                        setNetDiagBusy(false);
+                      }
+                    }}
+                  >
+                    {netDiagBusy ? "Scanning…" : "Scan network & export Excel"}
+                  </button>
+                </div>
               </InfoCard>
 
               <InfoCard id="settings-theme" title={t("settings.theme", language)}>
