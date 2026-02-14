@@ -69,6 +69,27 @@ html, body {
   width: 100%;
 }
 
+/* Settings/subscription/monitor pages: keep title truly centered
+   even when the back button label is wider than the right spacer. */
+.settings-page .header {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+}
+
+.settings-page .back-button {
+  justify-self: start;
+}
+
+.settings-page .header-content {
+  grid-column: 2;
+  flex: unset;
+}
+
+.settings-page .header > :last-child {
+  justify-self: end;
+}
+
 .header-content {
   position: relative;
   flex: 1;

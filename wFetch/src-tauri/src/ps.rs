@@ -1,3 +1,8 @@
+/*
+This module provides functionality to run PowerShell scripts with a timeout and capture their output. Simple? Yes.
+Documentation is in the README.md of the project root(wFetch).
+Written by Patyi Simon in 2026.
+*/
 use std::io::Read;
 use std::process::{Command, Stdio};
 use std::time::Duration;

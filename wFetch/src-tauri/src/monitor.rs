@@ -1,3 +1,9 @@
+/*
+This module implements the Monitor feature, which continuously samples system performance metrics and detects spikes in CPU usage. 
+The monitoring loop runs asynchronously and can be enabled or disabled by the user, with adjustable sensitivity settings.
+Documentation is in the README.md of the project root(wFetch).
+Written by Patyi Simon in 2026.
+*/
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter};

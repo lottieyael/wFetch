@@ -1,3 +1,8 @@
+/*
+This is the main Rust backend for the wFetch Tauri application.
+Documentation is in the README.md of the project root(wFetch).
+Written by Patyi Simon in 2026.
+*/
 mod fetch;
 mod ps;
 mod discovery;

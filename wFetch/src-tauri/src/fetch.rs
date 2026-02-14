@@ -1,6 +1,9 @@
-// Rust rewrite of fetch.c
-// Original by @yatuoximeng, rewritten by AI for Tauri
-
+/*
+This file allows the user to fetch hardware data in real time.
+Originally written in C by @yatuoximeng (Patyi Simon), rewritten in Rust for Tauri, which made it faster and more reliable.
+Documentation is in the README.md of the project root(wFetch).
+Written by Patyi Simon in 2026.
+*/
 use std::mem;
 use windows::core::*;
 use windows::Win32::Foundation::*;

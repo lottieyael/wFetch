@@ -1,3 +1,8 @@
+/*
+This module provides functionality to export diagnostics data to an Excel file.
+Documentation is in the README.md of the project root(wFetch).
+Written by Patyi Simon in 2026.
+*/
 use std::path::Path;
 
 use rust_xlsxwriter::{Format, FormatAlign, Workbook, XlsxError};
@@ -7,7 +12,6 @@ use crate::diagnostics::RemoteSystemInfo;
 fn to_err(e: XlsxError) -> String {
     format!("XLSX export error: {e}")
 }
-
 pub fn write_diagnostics_xlsx(path: &Path, rows: &[RemoteSystemInfo]) -> Result<(), String> {
     let mut workbook = Workbook::new();
     let worksheet = workbook.add_worksheet();

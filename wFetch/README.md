@@ -581,15 +581,28 @@ Az alábbiak a projektben ténylegesen implementált, névvel rendelkező függv
 
 ### `function App()`
 
-- **Felelősség**: teljes UI állapotgép: rendszerinfo betöltés, AI elemzés UX (progress + cooldown), licenc kezelő nézetek, monitor nézet, admin network diag.
+Az UI a refaktor után több fájlra lett szétbontva: a `App` már inkább *root composer* (összeállítja a hookokat és a page-eket), míg a nagyobb UI blokkok külön `pages/` komponensekben vannak.
+
+- **Felelősség**: navigáció (overview vs extras oldalak) és “oldalváltás” animáció (`isExiting`) kezelése; a domain logikák (rendszerinfo, entitlements, theme, monitor) hookokban vannak.
 - **Adatforrások**:
-	- Tauri backend `invoke()` parancsok.
-	- monitor események: `listen("monitor-incident", ...)`.
+	- Tauri backend `invoke()` parancsok a hookokban/page-ekben.
+	- monitor események: `listen("monitor-incident", ...)` a monitor hookban.
 	- `localStorage`: language, theme, saveTheme, monitorEnabled, monitorSensitivity, devUnlocked.
 
-#### Fontosabb belső (névvel rendelkező) függvények
+### Frontend fájlstruktúra (jelenlegi)
 
-##### `const applyTheme = (themeName) => { ... }`
+- `src/pages/OverviewPage.jsx`: az “Overview” oldal UI + AI elemzés UX (cooldown/progress) és az Extras dropdown.
+- `src/pages/SettingsPage.jsx`: a Settings/Subscription/Monitor oldalak UI-ja (Extras).
+- `src/hooks/useSystemInfo.js`: fast/slow rendszerinfo betöltés + memória polling.
+- `src/hooks/useEntitlements.js`: LemonSqueezy entitlement cache + refresh + dev unlock flag.
+- `src/hooks/useThemePreference.js`: `saveTheme` + `theme` localStorage és theme alkalmazás.
+- `src/hooks/useMonitorSettings.js`: background monitor kapcsolók + sensitivity + incidents + event listener.
+- `src/components/InfoComponents.jsx`: `InfoCard` / `InfoRow` / `ProgressBar` / `FadingText` közös UI elemek.
+- `src/theme.js`: theme palette + `applyTheme()` (CSS változók beállítása).
+
+#### Fontosabb belső (névvel rendelkező) függvények / logika
+
+##### `applyTheme(themeName)` (lásd `src/theme.js`)
 
 - **Felelősség**: kiválasztott témához tartozó CSS változók beállítása (`document.documentElement.style.setProperty`).
 - **Bemenet**: `themeName` (`system`, `light`, `dark`, `cherry`, `midnight`).
@@ -597,7 +610,7 @@ Az alábbiak a projektben ténylegesen implementált, névvel rendelkező függv
 - **Mellékhatás**: globális CSS változók módosítása (azonnali UI átállás).
 - **Megjegyzés**: előfizetés nélkül a nem-system témák le vannak tiltva.
 
-##### `const nudgeStory = async () => { ... }`
+##### `nudgeStory()` (az Overview oldalban)
 
 - **Felelősség**: AI elemzés triggerelése.
 - **Fő szabályok**:
@@ -607,7 +620,7 @@ Az alábbiak a projektben ténylegesen implementált, névvel rendelkező függv
 	- siker/hiba után 60s cooldown (`pauseUntil = now + 60000`).
 - **Backend hívás**: `invoke("send_to_ai", { systemInfo: bits, lang: language })`.
 
-##### `const navigateTo = (page) => { ... }`
+##### `navigateTo(page)` (App root)
 
 - **Felelősség**: egyszerű oldalváltás animációval.
 - **Működés**: `isExiting=true`, 300ms után `currentPage=page`, majd vissza.
@@ -626,10 +639,10 @@ Az alábbiak a projektben ténylegesen implementált, névvel rendelkező függv
 - gombnyomásra `invoke("scan_network_and_export_excel", { options: ... })`.
 - a result UI-ban megjelenik (output path + statisztika).
 
-### `function InfoCard({ title, children, id })`
+### `InfoCard` / `InfoRow` / `ProgressBar` / `FadingText`
 
-- **Felelősség**: “glass card” UI keret egységes címkével.
-- **Bemenet**: `title`, `children`, opcionális `id` (anchor/teszt).
+
+Ezek a közös UI elemek a `src/components/InfoComponents.jsx` fájlba kerültek.
 
 ### `function InfoRow({ label, value, extra })`
 

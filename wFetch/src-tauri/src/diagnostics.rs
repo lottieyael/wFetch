@@ -1,3 +1,9 @@
+/*
+This module provides functionality to diagnose remote Windows hosts using DCOM/WMI and collect system information. 
+It performs quick preflight checks to skip non-host targets and returns structured diagnostics results.
+Documentation is in the README.md of the project root(wFetch).
+Written by Patyi Simon in 2026.
+*/
 use std::time::Duration;
 use std::{net::{IpAddr, SocketAddr, TcpStream}, str::FromStr};
 

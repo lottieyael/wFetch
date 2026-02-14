@@ -1,3 +1,8 @@
+/*
+This module lets us manage LemonSqueezy license keys for the app.
+Documentation is in the README.md of the project root(wFetch).
+Written by Patyi Simon in 2026.
+*/
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager};
 

@@ -1,3 +1,9 @@
+/*
+This module allows the user to discover remote Windows hosts on the network.
+This code is non malicious and only uses standard Windows APIs to find hosts that are already communicating on the LAN or respond to pings.
+Documentation is in the README.md of the project root(wFetch).
+Written by Patyi Simon in 2026.
+*/
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
