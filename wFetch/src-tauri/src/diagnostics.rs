@@ -28,7 +28,7 @@ pub struct RemoteSystemInfo {
 }
 
 pub fn diagnose_host(ip: &str, timeout: Duration) -> RemoteSystemInfo {
-    // Avoid obvious non-host targets (multicast/broadcast).
+    // Avoids some known and obvious non-host targets. Yes, its hardcoded. If it works, don't touch it.
     if ip == "255.255.255.255" || ip.starts_with("224.") || ip.starts_with("225.") || ip.starts_with("226.")
         || ip.starts_with("227.") || ip.starts_with("228.") || ip.starts_with("229.") || ip.starts_with("230.")
         || ip.starts_with("231.") || ip.starts_with("232.") || ip.starts_with("233.") || ip.starts_with("234.")
@@ -68,7 +68,7 @@ pub fn diagnose_host(ip: &str, timeout: Duration) -> RemoteSystemInfo {
         };
     }
 
-    // Quick preflight: DCOM/WMI typically needs TCP/135 reachable.
+    // Quick preflight check!!! DCOM/WMI typically needs TCP/135 reachable.
     if let Ok(parsed) = IpAddr::from_str(ip) {
         let addr = SocketAddr::new(parsed, 135);
         let port_timeout = Duration::from_millis(800);
@@ -89,9 +89,6 @@ pub fn diagnose_host(ip: &str, timeout: Duration) -> RemoteSystemInfo {
             };
         }
     }
-
-    // Use DCOM to avoid WinRM dependency; still requires firewall + permissions.
-    // Return partial info + error message on failure.
         let script = r#"
 $ErrorActionPreference='Stop'
 $ProgressPreference='SilentlyContinue'
@@ -155,7 +152,6 @@ try {
 
             match serde_json::from_str::<RemoteSystemInfo>(&out.stdout) {
                 Ok(mut info) => {
-                    // Ensure IP field is set even if PS returned null.
                     if info.ip.trim().is_empty() {
                         info.ip = ip.to_string();
                     }

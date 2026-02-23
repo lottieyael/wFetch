@@ -27,11 +27,10 @@ pub fn discover_hosts(options: DiscoveryOptions, timeout: Duration) -> Result<Ve
     let max_hosts = options.max_hosts.unwrap_or(128).max(1) as usize;
     let include_neighbors = options.include_neighbors.unwrap_or(true);
     let ping_sweep = options.ping_sweep.unwrap_or(true);
-
-    // Notes:
-    // - Get-NetNeighbor catches devices already seen on the LAN.
-    // - Ping sweep attempts to find additional hosts on the local /24.
-    // - Both are best-effort and may miss hosts depending on firewall/config.
+/*    IMPORTANT!!!
+      Get-NetNeighbor catches devices already seen on the LAN.
+      Ping sweep attempts to find additional hosts on the local /24.
+      Both are best-effort and may miss hosts depending on firewall/config.     */
     let script = r#"
 $ErrorActionPreference='SilentlyContinue'
 $ProgressPreference='SilentlyContinue'
@@ -65,10 +64,18 @@ if (__PING_SWEEP__) {
       if ($octets.Length -eq 4) {
         $base = "$($octets[0]).$($octets[1]).$($octets[2])"
         $ips = 1..254 | ForEach-Object { "$base.$_" }
-        $alive = Test-Connection -ComputerName $ips -Count 1 -TimeoutSeconds 1 -ErrorAction SilentlyContinue |
-          Select-Object -ExpandProperty Address |
-          ForEach-Object { $_.IPAddressToString }
-        foreach ($ip in $alive) { $hosts += [PSCustomObject]@{ ip = $ip; source = 'ping' } }
+        $tasks = New-Object 'System.Collections.Generic.List[System.Threading.Tasks.Task[System.Net.NetworkInformation.PingReply]]'
+        $ipArr = [string[]]@($ips)
+        foreach ($t in $ipArr) {
+          $p = New-Object System.Net.NetworkInformation.Ping
+          $tasks.Add($p.SendPingAsync($t, 1000))
+        }
+        [System.Threading.Tasks.Task]::WaitAll($tasks.ToArray())
+        for ($i = 0; $i -lt $tasks.Count; $i++) {
+          if ($tasks[$i].Result.Status -eq [System.Net.NetworkInformation.IPStatus]::Success) {
+            $hosts += [PSCustomObject]@{ ip = $ipArr[$i]; source = 'ping' }
+          }
+        }
       }
     }
   } catch { }
@@ -89,8 +96,6 @@ $uniq | ConvertTo-Json -Compress
     if out.stdout.is_empty() || out.stdout == "null" {
         return Ok(vec![]);
     }
-
-    // PowerShell returns either an object or an array depending on count.
     let v: serde_json::Value = serde_json::from_str(&out.stdout)
         .map_err(|e| format!("Failed to parse discovery JSON: {e}. Output was: {}", out.stdout))?;
 

@@ -70,7 +70,6 @@ struct Meta {
 }
 
 fn is_active_status(status: &str) -> bool {
-    // LemonSqueezy statuses: inactive, active, expired, disabled
     matches!(status, "active" | "inactive") && status != "expired" && status != "disabled"
 }
 
@@ -249,8 +248,6 @@ pub async fn refresh_entitlements(app: &AppHandle) -> Result<Entitlements, Strin
 
     if !parsed.valid {
         let error = parsed.error.unwrap_or_else(|| "License key is not valid".to_string());
-
-        // Keep the license_key but mark as inactive in local cache.
         let now_ms = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map_err(|e| format!("Time error: {e}"))?

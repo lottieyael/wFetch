@@ -21,7 +21,6 @@ export function OverviewPage({
   const [pauseUntil, setPauseUntil] = useState(null);
   const [ticks, setTicks] = useState(0);
   const [analyzePercent, setAnalyzePercent] = useState(0);
-
   const [dropdownOpen, setDropdownOpen] = useState(false);
 
   useEffect(() => {
@@ -52,7 +51,7 @@ export function OverviewPage({
     const timer = setInterval(() => {
       setAnalyzePercent((prev) => {
         if (prev >= 99) {
-          // hover just under 100% until the request finishes
+          // hover just under 100% until the request finishes. TODO: make the UX better here.
           return 99;
         }
         const increment = 1 + Math.floor(Math.random() * 5);

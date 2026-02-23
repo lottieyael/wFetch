@@ -1,14 +1,11 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-
 export function useEntitlements() {
   const checkoutUrl = import.meta.env.VITE_LEMONSQUEEZY_CHECKOUT_URL || "";
   const devUnlockAllowed = import.meta.env.DEV;
   const isDevBuild = import.meta.env.TAURI_ENV_DEBUG === "true" || import.meta.env.DEV;
-
   const [entitlements, setEntitlements] = useState(null);
   const [entitlementsLoading, setEntitlementsLoading] = useState(true);
-
   const [devUnlocked, setDevUnlocked] = useState(() => {
     if (!devUnlockAllowed) return false;
     return localStorage.getItem("devUnlocked") === "true";
@@ -21,13 +18,11 @@ export function useEntitlements() {
         const cached = await invoke("ls_get_entitlements");
         if (!alive) return;
         setEntitlements(cached);
-
         try {
           const fresh = await invoke("ls_refresh_entitlements");
           if (!alive) return;
           setEntitlements(fresh);
         } catch {
-          // If refresh fails (offline), keep cached entitlements.
         }
       } catch {
         if (!alive) return;
@@ -37,16 +32,13 @@ export function useEntitlements() {
         setEntitlementsLoading(false);
       }
     };
-
     load();
     return () => {
       alive = false;
     };
   }, []);
-
   const isSubscribed = !!entitlements?.active;
   const effectiveSubscribed = devUnlocked || isSubscribed;
-
   return {
     checkoutUrl,
     devUnlockAllowed,

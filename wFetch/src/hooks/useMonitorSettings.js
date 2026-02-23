@@ -15,7 +15,6 @@ export function useMonitorSettings() {
     localStorage.setItem("monitorEnabled", monitorEnabled.toString());
     invoke("set_monitor_state", { enabled: monitorEnabled }).catch(() => {});
   }, [monitorEnabled]);
-
   useEffect(() => {
     localStorage.setItem("monitorSensitivity", monitorSensitivity.toString());
     invoke("set_monitor_sensitivity", { threshold: monitorSensitivity }).catch(
@@ -25,9 +24,7 @@ export function useMonitorSettings() {
 
   useEffect(() => {
     if (!monitorEnabled) return;
-
     invoke("get_monitor_incidents").then(setIncidents).catch(() => {});
-
     const unlistenPromise = listen("monitor-incident", (event) => {
       setIncidents((prev) => [event.payload, ...prev].slice(0, 10));
     });

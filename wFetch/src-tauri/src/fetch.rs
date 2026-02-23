@@ -1,8 +1,8 @@
 /*
 This file allows the user to fetch hardware data in real time.
-Originally written in C by @yatuoximeng (Patyi Simon), rewritten in Rust for Tauri, which made it faster and more reliable.
+Originally written in C by @yatuoximeng (Patyi Simon aka me again), rewritten in Rust for Tauri.
 Documentation is in the README.md of the project root(wFetch).
-Written by Patyi Simon in 2026.
+Written by Patyi Simon in 2025.
 */
 use std::mem;
 use windows::core::*;
@@ -174,7 +174,6 @@ pub fn get_gpu_info() -> Vec<GpuInfo> {
                 match factory.EnumAdapters1(i) {
                     Ok(adapter) => {
                         if let Ok(desc) = adapter.GetDesc1() {
-                            // Skip software renderers like Microsoft Basic Render Driver
                             if (desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE.0 as u32) != 0 {
                                 i += 1;
                                 continue;
@@ -182,7 +181,6 @@ pub fn get_gpu_info() -> Vec<GpuInfo> {
                             
                             let dedicated_vram = (desc.DedicatedVideoMemory / (1024 * 1024)) as u64;
                             let shared_system = (desc.SharedSystemMemory / (1024 * 1024)) as u64;
-                            // For integrated GPUs, use shared system memory if it's larger
                             let vram_mb = if shared_system > dedicated_vram {
                                 shared_system
                             } else {
@@ -202,8 +200,6 @@ pub fn get_gpu_info() -> Vec<GpuInfo> {
             if com_initialized { CoUninitialize(); }
             return gpus;
         }
-        
-        // Fallback: Use EnumDisplayDevicesW
         let mut dd: DISPLAY_DEVICEW = mem::zeroed();
         dd.cb = mem::size_of::<DISPLAY_DEVICEW>() as u32;
         
@@ -225,7 +221,7 @@ pub fn get_gpu_info() -> Vec<GpuInfo> {
 
 pub fn get_disk_info() -> DiskInfo {
     unsafe {
-        let mut free_bytes: u64 = 0; //declare values as unsigned 64 bit integers
+        let mut free_bytes: u64 = 0;
         let mut total_bytes: u64 = 0;
         let mut free_to_caller: u64 = 0;
         
@@ -235,7 +231,7 @@ pub fn get_disk_info() -> DiskInfo {
             Some(&mut total_bytes),
             Some(&mut free_bytes),
         ).is_ok() {
-            let total_gb = total_bytes as f64 / (1024.0 * 1024.0 * 1024.0); //declare value
+            let total_gb = total_bytes as f64 / (1024.0 * 1024.0 * 1024.0);
             let free_gb = free_bytes as f64 / (1024.0 * 1024.0 * 1024.0);
             DiskInfo { total_gb, free_gb }
         } else {
@@ -251,7 +247,7 @@ pub fn get_network_info() -> Vec<String> {
         let mut adapters = Vec::new();
         
         let result = GetAdaptersAddresses(
-            0, // AF_UNSPEC
+            0,
             GAA_FLAG_SKIP_ANYCAST | GAA_FLAG_SKIP_MULTICAST | GAA_FLAG_SKIP_DNS_SERVER,
             None,
             Some(addresses.as_mut_ptr() as *mut IP_ADAPTER_ADDRESSES_LH),

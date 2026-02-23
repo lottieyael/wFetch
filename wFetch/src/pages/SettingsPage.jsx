@@ -48,7 +48,7 @@ export function SettingsPage({
     const trimmed = licenseKey.trim();
     if (!trimmed) return;
 
-    if (devUnlockAllowed && trimmed === "bestMilioSupportEver") {
+    if (devUnlockAllowed && trimmed === "bestMilioSupportEver") { // TODO: change these!!
       localStorage.setItem("devUnlocked", "true");
       setDevUnlocked(true);
       setLicenseKey("");
@@ -57,7 +57,7 @@ export function SettingsPage({
       return;
     }
 
-    if (devUnlockAllowed && trimmed === "worstMilioSupportEver") {
+    if (devUnlockAllowed && trimmed === "worstMilioSupportEver") { // TODO: change these!! cringe!!
       localStorage.removeItem("devUnlocked");
       setDevUnlocked(false);
       setLicenseKey("");

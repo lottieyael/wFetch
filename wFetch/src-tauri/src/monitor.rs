@@ -201,8 +201,6 @@ pub fn start_monitor_loop(app: AppHandle, state: Arc<Mutex<MonitorState>>) {
     let mut prev_idle = 0;
     let mut prev_kernel = 0;
     let mut prev_user = 0;
-
-    // Initialize previous times
     unsafe {
         let mut idle = FILETIME::default();
         let mut kernel = FILETIME::default();
@@ -240,10 +238,10 @@ pub fn start_monitor_loop(app: AppHandle, state: Arc<Mutex<MonitorState>>) {
             let sensitivity = {
                 let mut lock = state_clone.lock().unwrap();
                 if !lock.enabled {
-                    break; // Exit loop if disabled
+                    break;
                 }
                 
-                // Keep last 60 samples (2 minutes)
+                // Keep last 60 samples (2 minutes) TODO: PERSISTENT MEMORY
                 lock.samples.push(sample.clone());
                 if lock.samples.len() > 60 {
                     lock.samples.remove(0);
@@ -251,17 +249,12 @@ pub fn start_monitor_loop(app: AppHandle, state: Arc<Mutex<MonitorState>>) {
                 
                 lock.sensitivity as f32
             };
-
-            // Check for spike
             if cpu > sensitivity {
                 consecutive_high_load += 1;
             } else {
                 consecutive_high_load = 0;
             }
-
-            // If high load for 3 consecutive samples (6 seconds), trigger snapshot
             if consecutive_high_load >= 3 {
-                // Reset counter to avoid spamming snapshots
                 consecutive_high_load = 0;
                 
                 let top_processes = capture_detailed_snapshot().await;
@@ -283,8 +276,6 @@ pub fn start_monitor_loop(app: AppHandle, state: Arc<Mutex<MonitorState>>) {
                 let _ = app.emit("monitor-incident", incident);
             }
         }
-        
-        // Clean up handle reference when loop exits
         let mut lock = state_clone.lock().unwrap();
         lock.running_handle = None;
     });

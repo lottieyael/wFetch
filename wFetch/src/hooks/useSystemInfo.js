@@ -1,3 +1,10 @@
+/*
+This file is responsible to load in the fetched info. 
+Generally, fetching GPU info is slower due to the complexity of it.
+I utilize parallel asychronous loading for UX.
+Documentation is in the README.md of the project root(wFetch).
+Written by Patyi Simon in 2026.
+*/
 import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 

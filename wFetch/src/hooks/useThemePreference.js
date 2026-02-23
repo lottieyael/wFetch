@@ -5,7 +5,6 @@ export function useThemePreference(effectiveSubscribed) {
   const [saveTheme, setSaveTheme] = useState(
     () => localStorage.getItem("saveTheme") === "true",
   );
-
   const [theme, setTheme] = useState(() => {
     const shouldSave = localStorage.getItem("saveTheme") === "true";
     return shouldSave ? localStorage.getItem("theme") || "system" : "system";
@@ -32,6 +31,5 @@ export function useThemePreference(effectiveSubscribed) {
       setTheme("system");
     }
   }, [effectiveSubscribed, theme]);
-
   return { theme, setTheme, saveTheme, setSaveTheme };
 }

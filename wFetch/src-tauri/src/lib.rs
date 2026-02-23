@@ -197,8 +197,6 @@ async fn scan_network_and_export_excel(
             succeeded += 1;
         }
     }
-
-    // Save to Desktop by default.
     let desktop = app
         .path()
         .resolve(".", tauri::path::BaseDirectory::Desktop)
@@ -346,7 +344,7 @@ async fn send_to_ai(system_info: SystemInfo, lang: Option<String>) -> Result<Str
             system_info.network.join(", ")
         }
     );
-
+    // AI REQUEST, DEEPSEEK, AI CHAT ( <-- just here for ctrl + F shenanigans)
     let memo = OpenAIRequest {
         model: "deepseek-chat".to_string(),
         messages: vec![Message {
