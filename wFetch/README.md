@@ -9,7 +9,7 @@ Windows‑fókuszú Tauri + React asztali alkalmazás, ami gyorsan összegzi a h
 - **Helyi rendszer összegzés**: OS/CPU/RAM/Disk azonnali megjelenítése; GPU és hálózati adapterek “lassú” betöltése.
 - **AI elemzés** (DeepSeek chat endpoint): a rendszeradatokból emberi nyelvű tanácsok/összegzés.
 - **Előfizetés/licenc** (LemonSqueezy): aktiválás, frissítés/validálás, deaktiválás; lokális cache fájlban.
-- **Háttér monitor**: könnyű, periodikus CPU/memória figyelés; “incident” snapshot túlterhelés esetén, eseményként a frontend felé.
+- **Háttér monitor**: könnyű, másodpercenkénti CPU/memória figyelés; "incident" snapshot CPU-tüske esetén, eseményként a frontend felé; minták és incidensek `localStorage`-ban is perzisztálódnak; élő CPU/RAM kijelző + kétcsatornás bar chart a UI-ban.
 - **LAN diagnosztika + Excel export**: host felderítés, távoli CIM lekérdezések, `.xlsx` jelentés az Asztalra.
 
 ## Tech stack
@@ -77,7 +77,16 @@ Főbb parancsok:
 - `send_to_ai` → AI elemzés (rate limit UI oldalon)
 - `scan_network_and_export_excel` → LAN host scan + távoli diagnosztika + Excel export
 - `ls_*` → licenc/előfizetés kezelés
-- `set_monitor_state`, `set_monitor_sensitivity`, `get_monitor_incidents` → háttér monitor
+- `set_monitor_state`, `set_monitor_sensitivity` → háttér monitor vezérlés
+- `get_monitor_samples` → aktuális CPU/RAM mintasor lekérése
+- `get_monitor_incidents` → incidensek lekérése
+- `delete_monitor_incident` → egyedi incidens törlése
+- `clear_monitor_incidents` → összes incidens törlése
+
+Főbb backend → frontend események:
+
+- `monitor-sample` → másodpercenkénti CPU/RAM minta
+- `monitor-incident` → CPU-tüske incidens + top process lista
 
 ### Modulszerkezet (Rust)
 
@@ -225,7 +234,13 @@ Az alábbiak a projektben ténylegesen implementált, névvel rendelkező függv
 - **Működés**:
 	- `.env` betöltés (`dotenvy::dotenv().ok()`).
 	- `Monitor` state regisztrálása: `manage(Monitor(Arc<Mutex<MonitorState::new()>>))`.
-	- `invoke_handler` regisztrálja az összes Tauri parancsot, plusz a monitor modul parancsait.
+	- `invoke_handler` regisztrálja az összes Tauri parancsot, beleértve:
+		- `get_system_info`, `get_memory_info`, `send_to_ai`, `get_fast_system_info`, `get_gpu_info`, `get_network_info`
+		- `scan_network_and_export_excel`
+		- `ls_get_entitlements`, `ls_activate_license`, `ls_refresh_entitlements`, `ls_deactivate_license`
+		- `monitor::set_monitor_state`, `monitor::set_monitor_sensitivity`
+		- `monitor::get_monitor_samples`, `monitor::get_monitor_incidents`
+		- `monitor::delete_monitor_incident`, `monitor::clear_monitor_incidents`
 - **Mellékhatás**: GUI futtatása.
 
 ---
@@ -478,7 +493,7 @@ Az alábbiak a projektben ténylegesen implementált, névvel rendelkező függv
 - **Defaultok**:
 	- `enabled=false`
 	- `sensitivity=85`
-	- `samples=[]`, `incidents=[]`, `running_handle=None`
+	- `samples=[]` (VecDeque, kapacitás 128), `incidents=[]` (VecDeque, kapacitás 12), `running_handle=None`
 
 ### `fn filetime_to_u64(ft: FILETIME) -> u64`
 
@@ -520,13 +535,16 @@ Az alábbiak a projektben ténylegesen implementált, névvel rendelkező függv
 
 ### `pub fn start_monitor_loop(app: AppHandle, state: Arc<Mutex<MonitorState>>)`
 
-- **Felelősség**: háttér task indítása, ami 2 másodpercenként sample-t vesz.
+- **Felelősség**: háttér task indítása, ami **másodpercenként** (1s) sample-t vesz.
 - **Működés**:
 	- `GetSystemTimes` inicializáló mintavétel.
-	- loop: sleep(2s) → CPU% + memória.
-	- sample ring buffer (max 60 db ~ 2 perc).
-	- ha CPU > sensitivity 3 egymást követő mintán → incident.
+	- loop: sleep(1s) → CPU% + memória.
+	- `app.emit("monitor-sample", &sample)` minden mintavétel után (frontend élő kijelző frissítéséhez).
+	- sample ring buffer (max **120 db** ~ 2 perc 1s intervallumon).
+	- incidens-trigger: **csúszó ablak** — az utolsó 5 mintából legalább 3 haladja meg a sensitivity küszöböt.
+	- incident után **10 másodperces cooldown** (újra-triggerelés megelőzése), `recent_high` visszaáll.
 	- incident esetén `capture_detailed_snapshot()` + `app.emit("monitor-incident", incident)`.
+	- max **10 incidens** tárolódik a ring bufferben.
 	- leállás: ha `enabled` false lesz, a loop kilép, `running_handle=None`.
 
 ### `pub fn set_monitor_state(app: AppHandle, state: tauri::State<'_, Monitor>, enabled: bool)`
@@ -541,12 +559,28 @@ Az alábbiak a projektben ténylegesen implementált, névvel rendelkező függv
 ### `pub fn set_monitor_sensitivity(state: tauri::State<'_, Monitor>, threshold: u8)`
 
 - **Tauri parancs**.
-- **Felelősség**: küszöbérték állítása (százalék).
+- **Felelősség**: küszöbérték állítása (százalék, 50–99).
+
+### `pub fn get_monitor_samples(state: tauri::State<'_, Monitor>) -> Vec<MonitorSample>`
+
+- **Tauri parancs**.
+- **Felelősség**: az összes tárolt minta visszaadása (max 120 db) a UI-nak.
+- **UI használat**: monitor bekapcsolásakor egyszer lekérdezi a hook, utána `monitor-sample` eseményeken frissül.
 
 ### `pub fn get_monitor_incidents(state: tauri::State<'_, Monitor>) -> Vec<IncidentSnapshot>`
 
 - **Tauri parancs**.
-- **Felelősség**: utolsó incidentek (max ~10) lekérése UI számára.
+- **Felelősség**: az utolsó incidensek (max 10) lekérése UI számára.
+
+### `pub fn delete_monitor_incident(state: tauri::State<'_, Monitor>, id: String)`
+
+- **Tauri parancs**.
+- **Felelősség**: egyedi incidens törlése az in-memory bufferből id alapján.
+
+### `pub fn clear_monitor_incidents(state: tauri::State<'_, Monitor>)`
+
+- **Tauri parancs**.
+- **Felelősség**: összes incidens törlése az in-memory bufferből.
 
 ---
 
@@ -587,7 +621,7 @@ Az UI a refaktor után több fájlra lett szétbontva: a `App` már inkább *roo
 - **Adatforrások**:
 	- Tauri backend `invoke()` parancsok a hookokban/page-ekben.
 	- monitor események: `listen("monitor-incident", ...)` a monitor hookban.
-	- `localStorage`: language, theme, saveTheme, monitorEnabled, monitorSensitivity, devUnlocked.
+	- `localStorage`: language, theme, saveTheme, monitorEnabled, monitorSensitivity, devUnlocked, monitorIncidents.
 
 ### Frontend fájlstruktúra (jelenlegi)
 
@@ -596,7 +630,7 @@ Az UI a refaktor után több fájlra lett szétbontva: a `App` már inkább *roo
 - `src/hooks/useSystemInfo.js`: fast/slow rendszerinfo betöltés + memória polling.
 - `src/hooks/useEntitlements.js`: LemonSqueezy entitlement cache + refresh + dev unlock flag.
 - `src/hooks/useThemePreference.js`: `saveTheme` + `theme` localStorage és theme alkalmazás.
-- `src/hooks/useMonitorSettings.js`: background monitor kapcsolók + sensitivity + incidents + event listener.
+- `src/hooks/useMonitorSettings.js`: background monitor kapcsolók + sensitivity + samples + incidents + event listener + localStorage perzisztencia.
 - `src/components/InfoComponents.jsx`: `InfoCard` / `InfoRow` / `ProgressBar` / `FadingText` közös UI elemek.
 - `src/theme.js`: theme palette + `applyTheme()` (CSS változók beállítása).
 
@@ -605,10 +639,11 @@ Az UI a refaktor után több fájlra lett szétbontva: a `App` már inkább *roo
 ##### `applyTheme(themeName)` (lásd `src/theme.js`)
 
 - **Felelősség**: kiválasztott témához tartozó CSS változók beállítása (`document.documentElement.style.setProperty`).
-- **Bemenet**: `themeName` (`system`, `light`, `dark`, `cherry`, `midnight`).
-- **Működés**: theme mapből kiválaszt, fallback `system`.
+- **Bemenet**: `themeName` (`midnight`, `system`, `light`, `dark`, `cherry`).
+- **Működés**: theme mapből kiválaszt, fallback `midnight`.
 - **Mellékhatás**: globális CSS változók módosítása (azonnali UI átállás).
-- **Megjegyzés**: előfizetés nélkül a nem-system témák le vannak tiltva.
+- **Ingyenes témák**: `midnight` és `system` előfizetés nélkül is elérhető; `light`, `dark`, `cherry` előfizetést igényel (vagy dev unlock).
+- **Megjegyzés**: ha nem aktív az előfizetés és prémium téma van kiválasztva, automatikusan `midnight`-ra vált vissza.
 
 ##### `nudgeStory()` (az Overview oldalban)
 
@@ -641,20 +676,23 @@ Az UI a refaktor után több fájlra lett szétbontva: a `App` már inkább *roo
 
 ### `InfoCard` / `InfoRow` / `ProgressBar` / `FadingText`
 
-
 Ezek a közös UI elemek a `src/components/InfoComponents.jsx` fájlba kerültek.
+
+### `function InfoCard({ title, children, id })`
+
+- **Felelősség**: kártya konténer cím + tartalom rendereléshez.
+- **Megjegyzés**: `id` prop opcionális; DOM-ra kerül, hasznos anchor-ként.
 
 ### `function InfoRow({ label, value, extra })`
 
 - **Felelősség**: kulcs‑érték sor megjelenítése.
 - **Megjegyzés**: `extra` esetén zárójelben jelenik meg.
 
-### `function ProgressBar({ percent, color })`
+### `function ProgressBar({ percent })`
 
 - **Felelősség**: százalékos sáv megjelenítése.
-- **Bemenet**:
-	- `percent`: 0..100.
-	- `color`: jelenleg `blue` esetén kék gradient, más esetben lila/piros gradient.
+- **Bemenet**: `percent` 0..100.
+- **Megjegyzés**: megjelenés CSS class-alapú (nincs `color` prop); a stílust az `App.css` határozza meg.
 
 ### `function FadingText({ text, startDelay = 0, step = 20 })`
 
@@ -662,7 +700,48 @@ Ezek a közös UI elemek a `src/components/InfoComponents.jsx` fájlba kerültek
 - **Működés**:
 	- a stringet karakterekre bontja.
 	- minden karakter külön span, `animationDelay = startDelay + i*step`.
-- **Megjegyzés**: space esetén non‑breaking space (`\u00A0`).
+- **Megjegyzés**: space esetén non-breaking space (`\u00A0`).
+
+---
+
+## `src/hooks/useMonitorSettings.js`
+
+### `export function useMonitorSettings()`
+
+- **Felelősség**: monitor beállítások, live minták, incidensek és Tauri-események kezelése.
+- **State**:
+	- `monitorEnabled` / `setMonitorEnabled`: ki/be kapcsoló; `localStorage`-ban is tárolódik.
+	- `monitorSensitivity` / `setMonitorSensitivity`: küszöbérték (50–99%); `localStorage`-ban is tárolódik.
+	- `incidents`: incidensek listája; `localStorage`-ban perzisztálódik (max 50, `STORAGE_KEY="monitorIncidents"`).
+	- `samples`: élő CPU/RAM mintasor (utolsó 120 db).
+- **Inicializálás** (monitor bekapcsolásakor):
+	- `get_monitor_incidents` backend hívás → backend in-memory incidensek és localStorage incidensek összefűzése (deduplikálás id alapján).
+	- `get_monitor_samples` backend hívás → inicializálja a minták tömbjét.
+	- `listen("monitor-incident", ...)` → új incidens érkezésekor frissíti a listát és `localStorage`-ba menti.
+	- `listen("monitor-sample", ...)` → új mintát fűz a `samples` tömb végére (max 120).
+- **Callbackek**:
+	- `deleteIncident(id)`: `delete_monitor_incident` backend hívás + lokális törlés + `localStorage` frissítés.
+	- `clearIncidents()`: `clear_monitor_incidents` backend hívás + lokális törlés + `localStorage` törlés.
+- **Visszaadott értékek**: `monitorEnabled`, `setMonitorEnabled`, `monitorSensitivity`, `setMonitorSensitivity`, `incidents`, `samples`, `deleteIncident`, `clearIncidents`.
+
+---
+
+## Monitor UI (SettingsPage — monitor oldal)
+
+A monitor oldal (`currentPage === "monitor"`) a `SettingsPage` komponensben renderelődik, és az alábbi funkciókat tartalmazza:
+
+- **Engedélyező kapcsoló**: toggle switch a monitor be/kikapcsolásához.
+- **Sensitivity slider**: 50–99% közötti érzékenység állítása (csak bekapcsolt monitor esetén látható).
+- **Élő kijelző (live gauges)**: ha a monitor be van kapcsolva és van minta, megjelenik:
+	- CPU% és RAM (GB + %) nagy értékkijelzőkkel + sávval.
+	- "2 min window · Ns" felirat a mintaszám jelzésével.
+- **Kétcsatornás bar chart**: CPU (kék) és RAM (piros/narancs) oszlopok egymás mellett, az összes tárolt mintára.
+- **Incidensek lista**: minden incidens kártya tartalmaz:
+	- dátum + pontos idő.
+	- CPU% és RAM értékbadge-ek.
+	- kattintásra kibontható részletek: top 10 process neve, CPU%-a és RAM (MB) értéke.
+	- egyedi törlés gomb (`×`).
+	- "Clear all" gomb az összes incidens egyszerre törléséhez.
 
 ---
 
@@ -681,6 +760,5 @@ Ezek a közös UI elemek a `src/components/InfoComponents.jsx` fájlba kerültek
 
 - A Tauri config a `src-tauri/tauri.conf.json` fájlban van.
 - Vite server port fix: 1420 (`vite.config.js`).
-- A háttér monitor eseményt `monitor-incident` néven küldi a backend.
-
-empty
+- A háttér monitor eseményeket `monitor-sample` (minden másodpercben) és `monitor-incident` (CPU-tüske esetén) néven küldi a backend.
+- Az alkalmazás jelenlegi verziója: **1.5.2** (lásd Settings oldal).

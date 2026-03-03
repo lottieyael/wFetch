@@ -4,6 +4,7 @@ The monitoring loop runs asynchronously and can be enabled or disabled by the us
 Documentation is in the README.md of the project root(wFetch).
 Written by Patyi Simon in 2026.
 */
+use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter};
@@ -44,8 +45,8 @@ pub struct IncidentSnapshot {
 pub struct MonitorState {
     pub enabled: bool,
     pub sensitivity: u8,
-    pub samples: Vec<MonitorSample>,
-    pub incidents: Vec<IncidentSnapshot>,
+    pub samples: VecDeque<MonitorSample>,
+    pub incidents: VecDeque<IncidentSnapshot>,
     pub running_handle: Option<tauri::async_runtime::JoinHandle<()>>,
 }
 
@@ -54,8 +55,8 @@ impl MonitorState {
         Self {
             enabled: false,
             sensitivity: 85,
-            samples: Vec::new(),
-            incidents: Vec::new(),
+            samples: VecDeque::with_capacity(128),
+            incidents: VecDeque::with_capacity(12),
             running_handle: None,
         }
     }
@@ -214,10 +215,11 @@ pub fn start_monitor_loop(app: AppHandle, state: Arc<Mutex<MonitorState>>) {
 
     let state_clone = state.clone();
     let handle = tauri::async_runtime::spawn(async move {
-        let mut consecutive_high_load = 0;
+        let mut recent_high: VecDeque<bool> = VecDeque::with_capacity(6);
+        let mut cooldown = 0u32;
         
         loop {
-            sleep(Duration::from_secs(2)).await;
+            sleep(Duration::from_secs(1)).await;
 
             let (cpu, idle, kernel, user) = get_cpu_load(prev_idle, prev_kernel, prev_user);
             prev_idle = idle;
@@ -241,21 +243,32 @@ pub fn start_monitor_loop(app: AppHandle, state: Arc<Mutex<MonitorState>>) {
                     break;
                 }
                 
-                // Keep last 60 samples (2 minutes) TODO: PERSISTENT MEMORY
-                lock.samples.push(sample.clone());
-                if lock.samples.len() > 60 {
-                    lock.samples.remove(0);
+                // Keep last 120 samples (2 minutes at 1s interval)
+                lock.samples.push_back(sample.clone());
+                while lock.samples.len() > 120 {
+                    lock.samples.pop_front();
                 }
                 
                 lock.sensitivity as f32
             };
-            if cpu > sensitivity {
-                consecutive_high_load += 1;
-            } else {
-                consecutive_high_load = 0;
+
+            let _ = app.emit("monitor-sample", &sample);
+
+            // Sliding window: trigger if 3 out of last 5 samples exceed threshold
+            recent_high.push_back(cpu > sensitivity);
+            while recent_high.len() > 5 {
+                recent_high.pop_front();
             }
-            if consecutive_high_load >= 3 {
-                consecutive_high_load = 0;
+
+            if cooldown > 0 {
+                cooldown -= 1;
+            }
+
+            let high_count = recent_high.iter().filter(|&&h| h).count();
+            if high_count >= 3 && cooldown == 0 {
+                // Cooldown prevents re-triggering for 10 seconds after a capture
+                cooldown = 10;
+                recent_high.clear();
                 
                 let top_processes = capture_detailed_snapshot().await;
                 
@@ -268,9 +281,9 @@ pub fn start_monitor_loop(app: AppHandle, state: Arc<Mutex<MonitorState>>) {
                 };
                 
                 let mut lock = state_clone.lock().unwrap();
-                lock.incidents.push(incident.clone());
-                if lock.incidents.len() > 10 {
-                    lock.incidents.remove(0);
+                lock.incidents.push_back(incident.clone());
+                while lock.incidents.len() > 10 {
+                    lock.incidents.pop_front();
                 }
                 
                 let _ = app.emit("monitor-incident", incident);
@@ -302,8 +315,26 @@ pub fn set_monitor_sensitivity(state: tauri::State<'_, Monitor>, threshold: u8) 
 }
 
 #[tauri::command]
+pub fn get_monitor_samples(state: tauri::State<'_, Monitor>) -> Vec<MonitorSample> {
+    let lock = state.0.lock().unwrap();
+    lock.samples.iter().cloned().collect()
+}
+
+#[tauri::command]
 pub fn get_monitor_incidents(state: tauri::State<'_, Monitor>) -> Vec<IncidentSnapshot> {
     let lock = state.0.lock().unwrap();
-    lock.incidents.clone()
+    lock.incidents.iter().cloned().collect()
+}
+
+#[tauri::command]
+pub fn delete_monitor_incident(state: tauri::State<'_, Monitor>, id: String) {
+    let mut lock = state.0.lock().unwrap();
+    lock.incidents.retain(|inc| inc.id != id);
+}
+
+#[tauri::command]
+pub fn clear_monitor_incidents(state: tauri::State<'_, Monitor>) {
+    let mut lock = state.0.lock().unwrap();
+    lock.incidents.clear();
 }
 

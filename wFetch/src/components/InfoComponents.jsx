@@ -21,19 +21,13 @@ export function InfoRow({ label, value, extra }) {
   );
 }
 
-export function ProgressBar({ percent, color }) {
-  const gradient =
-    color === "blue"
-      ? "linear-gradient(90deg, #007AFF 0%, #5E5CE6 100%)"
-      : "linear-gradient(90deg, #AF52DE 0%, #FF2D55 100%)";
-
+export function ProgressBar({ percent }) {
   return (
     <div className="progress-container">
       <div
         className="progress-bar"
         style={{
           width: `${percent}%`,
-          background: gradient,
         }}
       >
         <div className="progress-shine"></div>

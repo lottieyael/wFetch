@@ -34,6 +34,9 @@ export function SettingsPage({
   monitorSensitivity,
   setMonitorSensitivity,
   incidents,
+  samples,
+  deleteIncident,
+  clearIncidents,
 }) {
   const [licenseKey, setLicenseKey] = useState("");
   const [licenseBusy, setLicenseBusy] = useState(false);
@@ -43,6 +46,7 @@ export function SettingsPage({
   const [netDiagBusy, setNetDiagBusy] = useState(false);
   const [netDiagOops, setNetDiagOops] = useState(null);
   const [netDiagResult, setNetDiagResult] = useState(null);
+  const [expandedIncident, setExpandedIncident] = useState(null);
 
   const activateLicense = async () => {
     const trimmed = licenseKey.trim();
@@ -259,6 +263,8 @@ export function SettingsPage({
 
         {currentPage === "monitor" && (
           <InfoCard id="settings-monitor" title={t("settings.monitor.title", language)}>
+
+            {/* Enable toggle + sensitivity */}
             <div className="setting-row">
               <div className="setting-label">
                 {t("settings.monitor.enable", language)}
@@ -296,29 +302,137 @@ export function SettingsPage({
               </div>
             )}
 
-            {monitorEnabled && incidents.length > 0 && (
-              <div className="incidents-list">
-                <div className="setting-label" style={{ marginBottom: "10px" }}>
-                  {t("settings.monitor.viewIncidents", language)}
-                </div>
-                {incidents.map((inc) => (
-                  <div key={inc.id} className="incident-item">
-                    <div className="incident-header">
-                      <span>{new Date(inc.timestamp * 1000).toLocaleTimeString()}</span>
-                      <span className="incident-cpu">{inc.total_cpu.toFixed(1)}% CPU</span>
+            {/* Live stats gauges */}
+            {monitorEnabled && samples.length > 0 && (() => {
+              const latest = samples[samples.length - 1];
+              const cpuPct = latest.cpu_percent;
+              const ramUsed = latest.memory_used_gb;
+              const ramTotal = latest.memory_total_gb;
+              const ramPct = ramTotal > 0 ? (ramUsed / ramTotal) * 100 : 0;
+              return (
+                <div className="monitor-live-section">
+                  <div className="monitor-live-header">
+                    <span className="monitor-section-label">{t("settings.monitor.liveUsage", language)}</span>
+                    <span className="monitor-window-hint">2 min window · {samples.length}s</span>
+                  </div>
+
+                  {/* Big gauges */}
+                  <div className="monitor-gauges">
+                    <div className="monitor-gauge">
+                      <div className="monitor-gauge-value">{cpuPct.toFixed(1)}<span className="monitor-gauge-unit">%</span></div>
+                      <div className="monitor-gauge-label">CPU</div>
+                      <div className="monitor-gauge-track">
+                        <div className="monitor-gauge-fill" style={{ width: `${cpuPct}%` }} />
+                      </div>
                     </div>
-                    <div className="incident-processes">
-                      {inc.processes.slice(0, 3).map((p) => (
-                        <div key={p.pid} className="incident-process">
-                          <span>{p.name}</span>
-                          <span>{p.cpu_percent.toFixed(1)}%</span>
+                    <div className="monitor-gauge">
+                      <div className="monitor-gauge-value">{ramUsed.toFixed(1)}<span className="monitor-gauge-unit">GB</span></div>
+                      <div className="monitor-gauge-label">RAM · {ramPct.toFixed(0)}%</div>
+                      <div className="monitor-gauge-track">
+                        <div className="monitor-gauge-fill monitor-gauge-fill-ram" style={{ width: `${ramPct}%` }} />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Dual chart */}
+                  <div className="monitor-chart">
+                    <div className="monitor-chart-bars">
+                      {samples.map((s, i) => (
+                        <div key={i} className="monitor-bar-group">
+                          <div
+                            className="monitor-bar monitor-bar-cpu"
+                            style={{ height: `${Math.max(s.cpu_percent, 2)}%` }}
+                            title={`CPU ${s.cpu_percent.toFixed(1)}%`}
+                          />
+                          <div
+                            className="monitor-bar monitor-bar-ram"
+                            style={{ height: `${Math.max(s.memory_total_gb > 0 ? (s.memory_used_gb / s.memory_total_gb) * 100 : 2, 2)}%` }}
+                            title={`RAM ${s.memory_used_gb.toFixed(1)} GB`}
+                          />
                         </div>
                       ))}
                     </div>
+                    <div className="monitor-chart-legend">
+                      <span className="monitor-legend-cpu">&#9632; CPU</span>
+                      <span className="monitor-legend-ram">&#9632; RAM</span>
+                    </div>
                   </div>
-                ))}
+                </div>
+              );
+            })()}
+
+            {/* Incidents */}
+            {incidents.length > 0 && (
+              <div className="monitor-incidents-section">
+                <div className="monitor-incidents-header">
+                  <span className="monitor-section-label">
+                    {t("settings.monitor.viewIncidents", language)}
+                    <span className="monitor-incident-count">{incidents.length}</span>
+                  </span>
+                  <button
+                    type="button"
+                    className="monitor-clear-btn"
+                    onClick={clearIncidents}
+                  >
+                    Clear all
+                  </button>
+                </div>
+                <div className="monitor-incidents-list">
+                  {incidents.map((inc) => {
+                    const isExpanded = expandedIncident === inc.id;
+                    const d = new Date(inc.timestamp * 1000);
+                    const dateStr = d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+                    const timeStr = d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+                    const ramPct = inc.total_memory_gb > 0
+                      ? ((inc.total_memory_gb / (samples[0]?.memory_total_gb || inc.total_memory_gb)) * 100).toFixed(0)
+                      : null;
+                    return (
+                      <div key={inc.id} className={`monitor-incident-card ${isExpanded ? "monitor-incident-expanded" : ""}`}>
+                        <div
+                          className="monitor-incident-summary"
+                          onClick={() => setExpandedIncident(isExpanded ? null : inc.id)}
+                        >
+                          <div className="monitor-incident-time">
+                            <span className="monitor-incident-date">{dateStr}</span>
+                            <span className="monitor-incident-clock">{timeStr}</span>
+                          </div>
+                          <div className="monitor-incident-metrics">
+                            <span className="monitor-incident-badge monitor-incident-badge-cpu">{inc.total_cpu.toFixed(1)}% CPU</span>
+                            <span className="monitor-incident-badge monitor-incident-badge-ram">{inc.total_memory_gb.toFixed(1)} GB RAM</span>
+                          </div>
+                          <div className="monitor-incident-actions">
+                            <span className="monitor-incident-chevron">{isExpanded ? "▲" : "▼"}</span>
+                            <button
+                              type="button"
+                              className="monitor-delete-btn"
+                              onClick={(e) => { e.stopPropagation(); deleteIncident(inc.id); }}
+                              title="Delete incident"
+                            >×</button>
+                          </div>
+                        </div>
+                        {isExpanded && (
+                          <div className="monitor-incident-processes">
+                            <div className="monitor-process-heading">
+                              <span>Process</span>
+                              <span>CPU %</span>
+                              <span>RAM</span>
+                            </div>
+                            {inc.processes.map((p, idx) => (
+                              <div key={`${p.pid}-${idx}`} className="monitor-process-row">
+                                <span className="monitor-process-name" title={p.name}>{p.name}</span>
+                                <span className="monitor-process-cpu">{p.cpu_percent.toFixed(1)}%</span>
+                                <span className="monitor-process-ram">{(p.memory_bytes / (1024 * 1024)).toFixed(0)} MB</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             )}
+
             {monitorEnabled && incidents.length === 0 && (
               <div className="setting-row">
                 <div className="setting-help">{t("settings.monitor.noIncidents", language)}</div>
@@ -393,6 +507,13 @@ export function SettingsPage({
                 <div className="setting-control">
                   <button
                     type="button"
+                    className={`pill-toggle ${theme === "midnight" ? "pill-toggle-active" : ""}`}
+                    onClick={() => setTheme("midnight")}
+                  >
+                    {t("settings.themes.midnight", language)}
+                  </button>
+                  <button
+                    type="button"
                     className={`pill-toggle ${theme === "system" ? "pill-toggle-active" : ""}`}
                     onClick={() => setTheme("system")}
                   >
@@ -421,14 +542,6 @@ export function SettingsPage({
                     disabled={!effectiveSubscribed}
                   >
                     {t("settings.themes.cherry", language)}{!effectiveSubscribed ? " 🔒" : ""}
-                  </button>
-                  <button
-                    type="button"
-                    className={`pill-toggle ${theme === "midnight" ? "pill-toggle-active" : ""}`}
-                    onClick={() => setTheme("midnight")}
-                    disabled={!effectiveSubscribed}
-                  >
-                    {t("settings.themes.midnight", language)}{!effectiveSubscribed ? " 🔒" : ""}
                   </button>
                 </div>
               </div>

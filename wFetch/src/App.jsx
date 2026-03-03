@@ -34,6 +34,9 @@ function App() {
     monitorSensitivity,
     setMonitorSensitivity,
     incidents,
+    samples,
+    deleteIncident,
+    clearIncidents,
   } = useMonitorSettings();
 
   useEffect(() => {
@@ -98,6 +101,9 @@ function App() {
           monitorSensitivity={monitorSensitivity}
           setMonitorSensitivity={setMonitorSensitivity}
           incidents={incidents}
+          samples={samples}
+          deleteIncident={deleteIncident}
+          clearIncidents={clearIncidents}
         />
       </main>
     );

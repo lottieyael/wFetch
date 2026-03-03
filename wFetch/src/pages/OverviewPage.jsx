@@ -107,8 +107,7 @@ export function OverviewPage({
           >
             <span className="settings-label">Extras</span>
           </button>
-          {dropdownOpen && (
-            <div className="settings-dropdown-menu">
+          <div className={`settings-dropdown-menu${dropdownOpen ? " is-open" : ""}`}>
               <button
                 className="settings-dropdown-item"
                 onClick={() => {
@@ -137,7 +136,6 @@ export function OverviewPage({
                 Background Monitor
               </button>
             </div>
-          )}
         </div>
         <div className="header-content">
           <h1 className="app-title">{t("app.title", language)}</h1>
@@ -220,7 +218,7 @@ export function OverviewPage({
               {t("labels.of", language)} {memory.total_gb.toFixed(1)} GB
             </div>
           </div>
-          <ProgressBar percent={memorySlice} color="blue" />
+          <ProgressBar percent={memorySlice} />
           <div className="metric-details">
             <span className="metric-detail">
               {t("labels.free", language)}: {memory.free_gb.toFixed(1)} GB
@@ -267,7 +265,7 @@ export function OverviewPage({
               {t("labels.of", language)} {disk.total_gb.toFixed(1)} GB
             </div>
           </div>
-          <ProgressBar percent={diskSlice} color="blue" />
+          <ProgressBar percent={diskSlice} />
           <div className="metric-details">
             <span className="metric-detail">
               {t("labels.free", language)}: {disk.free_gb.toFixed(1)} GB

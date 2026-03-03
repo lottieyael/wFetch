@@ -437,7 +437,10 @@ pub fn run() {
             ls_deactivate_license,
             monitor::set_monitor_state,
             monitor::set_monitor_sensitivity,
+            monitor::get_monitor_samples,
             monitor::get_monitor_incidents,
+            monitor::delete_monitor_incident,
+            monitor::clear_monitor_incidents,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

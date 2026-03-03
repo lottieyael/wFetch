@@ -7,7 +7,7 @@ export function useThemePreference(effectiveSubscribed) {
   );
   const [theme, setTheme] = useState(() => {
     const shouldSave = localStorage.getItem("saveTheme") === "true";
-    return shouldSave ? localStorage.getItem("theme") || "system" : "system";
+    return shouldSave ? localStorage.getItem("theme") || "midnight" : "midnight";
   });
 
   useEffect(() => {
@@ -22,13 +22,16 @@ export function useThemePreference(effectiveSubscribed) {
     }
   }, [theme, saveTheme]);
 
+  const FREE_THEMES = ["midnight", "system"];
+
   useEffect(() => {
-    applyTheme(effectiveSubscribed ? theme : "system");
+    const allowed = effectiveSubscribed || FREE_THEMES.includes(theme);
+    applyTheme(allowed ? theme : "midnight");
   }, [theme, effectiveSubscribed]);
 
   useEffect(() => {
-    if (!effectiveSubscribed && theme !== "system") {
-      setTheme("system");
+    if (!effectiveSubscribed && !FREE_THEMES.includes(theme)) {
+      setTheme("midnight");
     }
   }, [effectiveSubscribed, theme]);
   return { theme, setTheme, saveTheme, setSaveTheme };

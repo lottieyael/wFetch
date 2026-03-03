@@ -11,7 +11,7 @@ const translations = {
     settings: {
       title: "Settings",
       subtitle: "Peek under the hood",
-      backButton: "← Back to overview",
+      backButton: "Back to overview",
       version: "Version",
       buildMode: "Build version",
       buildModeDev: "Developer (tauri dev)",
@@ -56,6 +56,7 @@ const translations = {
         enableHelp: "Lightweight process monitoring (uses < 5MB RAM)",
         sensitivity: "Sensitivity Threshold",
         sensitivityHelp: "Trigger snapshot when CPU usage exceeds this %",
+        liveUsage: "Live Usage",
         viewIncidents: "View Incidents",
         noIncidents: "No high usage incidents detected yet.",
       },
@@ -96,7 +97,7 @@ const translations = {
     settings: {
       title: "Ajustes",
       subtitle: "Echa un vistazo bajo el capó",
-      backButton: "← Volver a resumen",
+      backButton: "Volver a resumen",
       version: "Versión",
       buildMode: "Versión de compilación",
       buildModeDev: "Desarrollo (tauri dev)",
@@ -173,7 +174,7 @@ const translations = {
     settings: {
       title: "Paramètres",
       subtitle: "Jeter un coup d'œil sous le capot",
-      backButton: "← Retour à l'aperçu",
+      backButton: "Retour à l'aperçu",
       version: "Version",
       buildMode: "Version de build",
       buildModeDev: "Développeur (tauri dev)",
@@ -249,7 +250,7 @@ const translations = {
     settings: {
       title: "Beállítások",
       subtitle: "Alakítsd az appot úgy, ahogy neked tetszik!",
-      backButton: "← Vissza az áttekintéshez",
+      backButton: "Vissza az áttekintéshez",
       application: "Alkalmazás",
       version: "Verzió",
       buildMode: "Build",
@@ -327,7 +328,7 @@ const translations = {
     settings: {
       title: "设置",
       subtitle: "深入了解系统",
-      backButton: "← 返回概览",
+      backButton: "返回概览",
       version: "版本",
       buildMode: "版本类型",
       buildModeDev: "开发模式 (tauri dev)",

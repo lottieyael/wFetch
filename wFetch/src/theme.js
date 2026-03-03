@@ -1,4 +1,17 @@
 export const THEMES = {
+  midnight: {
+    primary: "#00D9FF",
+    secondary: "#A78BFA",
+    tertiary: "#818CF8",
+    background: "linear-gradient(135deg, #000000 0%, #0a0a0f 50%, #050510 100%)",
+    textPrimary: "#E0E7FF",
+    textSecondary: "rgba(224, 231, 255, 0.5)",
+    cardBg: "rgba(255, 255, 255, 0.02)",
+    cardBorder: "rgba(167, 139, 250, 0.15)",
+    shadowColor: "rgba(0, 0, 0, 0.8)",
+    accentShadow: "rgba(0, 217, 255, 0.4)",
+    focusRing: "rgba(0, 217, 255, 0.3)",
+  },
   system: {
     primary: "#007AFF",
     secondary: "#5E5CE6",
@@ -13,17 +26,17 @@ export const THEMES = {
     focusRing: "rgba(0, 122, 255, 0.2)",
   },
   light: {
-    primary: "#2D7A4A",
-    secondary: "#74D19A",
-    tertiary: "#54E9C9",
-    background: "linear-gradient(135deg, #F5F5F5 0%, #E8F5E9 50%, #E0F2F1 100%)",
-    textPrimary: "#1a1a1a",
-    textSecondary: "rgba(26, 26, 26, 0.6)",
-    cardBg: "rgba(255, 255, 255, 0.85)",
-    cardBorder: "rgba(26, 26, 26, 0.08)",
-    shadowColor: "rgba(45, 122, 74, 0.15)",
-    accentShadow: "rgba(45, 122, 74, 0.3)",
-    focusRing: "rgba(45, 122, 74, 0.2)",
+    primary: "#2A7A45",
+    secondary: "#5CC987",
+    tertiary: "#3DD6B0",
+    background: "linear-gradient(160deg, #ffffff 0%, #edfaf4 25%, #d0f5e3 55%, #c8f0e8 80%, #e4faf4 100%)",
+    textPrimary: "#0c2218",
+    textSecondary: "rgba(12, 34, 24, 0.55)",
+    cardBg: "rgba(255, 255, 255, 0.55)",
+    cardBorder: "rgba(255, 255, 255, 0.88)",
+    shadowColor: "rgba(28, 96, 58, 0.18)",
+    accentShadow: "rgba(42, 122, 69, 0.4)",
+    focusRing: "rgba(42, 122, 69, 0.28)",
   },
   dark: {
     primary: "#FF0000",
@@ -51,23 +64,10 @@ export const THEMES = {
     accentShadow: "rgba(255, 20, 147, 0.3)",
     focusRing: "rgba(255, 20, 147, 0.2)",
   },
-  midnight: {
-    primary: "#00D9FF",
-    secondary: "#A78BFA",
-    tertiary: "#818CF8",
-    background: "linear-gradient(135deg, #000000 0%, #0a0a0f 50%, #050510 100%)",
-    textPrimary: "#E0E7FF",
-    textSecondary: "rgba(224, 231, 255, 0.5)",
-    cardBg: "rgba(255, 255, 255, 0.02)",
-    cardBorder: "rgba(167, 139, 250, 0.15)",
-    shadowColor: "rgba(0, 0, 0, 0.8)",
-    accentShadow: "rgba(0, 217, 255, 0.4)",
-    focusRing: "rgba(0, 217, 255, 0.3)",
-  },
 };
 
 export function applyTheme(themeName) {
-  const selectedTheme = THEMES[themeName] || THEMES.system;
+  const selectedTheme = THEMES[themeName] || THEMES.midnight;
   const root = document.documentElement;
 
   root.style.setProperty("--color-primary", selectedTheme.primary);
