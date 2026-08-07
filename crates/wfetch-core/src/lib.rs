@@ -8,9 +8,13 @@
 //! * [`target`] — turns user-supplied target specs into a bounded scan plan.
 //! * [`platform`] — the only place that touches OS network APIs.
 //! * [`proto`] — wire-format codecs for the discovery protocols. No I/O.
+//! * [`scan`] — the engine: planning, probing, merging and reporting.
+//! * [`fingerprint`] — device identification from accumulated evidence.
+//! * [`inventory`] — credentialed inspection of hosts already discovered.
 
 pub mod addr;
 pub mod fingerprint;
+pub mod inventory;
 pub mod mac;
 pub mod platform;
 pub mod proto;
@@ -21,5 +25,6 @@ pub use addr::{AddrClass, AddrError, IpCidr, Ipv4Cidr, Ipv6Cidr};
 pub use mac::MacAddr;
 pub use platform::{Capabilities, HostPlatform, Interface, NeighborEntry, NeighborState};
 pub use fingerprint::{DeviceClass, DeviceIdentity, OsFamily};
+pub use inventory::{Credentials, HostInventory, InventoryMethods};
 pub use scan::{Confidence, Evidence, Host, ScanReport};
 pub use target::{TargetError, TargetPlan, TargetSpec};

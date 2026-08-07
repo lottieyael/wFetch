@@ -8,6 +8,11 @@
 //! "the scanner actually finds hosts". They skip with a message when the
 //! environment cannot provide namespaces; see `tests/support/mod.rs`.
 
+// Network namespaces are a Linux facility; there is no equivalent to build this
+// harness on the other supported platforms. Their coverage comes from the unit
+// tests and the simulated transport instead.
+#![cfg(target_os = "linux")]
+
 mod support;
 
 use std::net::IpAddr;
