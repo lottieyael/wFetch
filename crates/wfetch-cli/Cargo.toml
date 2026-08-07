@@ -1,0 +1,11 @@
+[package]
+name = "wfetch-cli"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "wfetch"
+path = "src/main.rs"
+
+[dependencies]
+wfetch-core = { path = "../wfetch-core" }
