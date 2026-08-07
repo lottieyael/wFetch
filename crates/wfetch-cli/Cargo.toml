@@ -1,7 +1,11 @@
 [package]
 name = "wfetch-cli"
+description = "Command-line network scanner for administrators and agents."
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
 
 [[bin]]
 name = "wfetch"
@@ -9,3 +13,6 @@ path = "src/main.rs"
 
 [dependencies]
 wfetch-core = { path = "../wfetch-core" }
+clap = { version = "4", features = ["derive", "wrap_help"] }
+serde.workspace = true
+serde_json.workspace = true

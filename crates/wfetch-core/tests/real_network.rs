@@ -321,6 +321,67 @@ fn a_passive_neighbour_table_scan_finds_hosts_without_sending_probes() {
 }
 
 #[test]
+fn a_cold_cache_scan_still_reports_macs() {
+    // The neighbour table is read before any packet is sent, so on a cold ARP
+    // cache that first read sees nothing. Probing then populates the cache, and
+    // a second read picks the MACs up. Without that second pass a first scan
+    // reports no MACs and an immediate re-scan reports them all, which looks
+    // like the scanner is unreliable — and the MAC carries the vendor OUI, the
+    // strongest identification signal there is.
+    let lan = require_lan!(TestLan::create(
+        23,
+        &[(141, vec![8080]), (142, vec![8080])]
+    ));
+
+    // Deliberately do *not* warm the cache first.
+    let techniques = Techniques {
+        neighbor_table: true,
+        icmp_echo: false,
+        tcp_connect: true,
+        mdns: false,
+        ssdp: false,
+        netbios: false,
+        reverse_dns: false,
+    };
+
+    let platform = platform::host_platform();
+    let engine = Engine::new(SystemTransport::new(), lan_config(vec![8080], techniques));
+    let report = engine.scan(&plan_for(&lan), Some(platform.as_ref()));
+
+    assert_eq!(report.hosts.len(), 2);
+    for h in &report.hosts {
+        let mac = h
+            .mac
+            .unwrap_or_else(|| panic!("{} has no MAC after a cold-cache scan", h.ip));
+        assert!(!mac.is_zero());
+    }
+}
+
+#[test]
+fn the_post_probe_neighbour_pass_does_not_leak_addresses_outside_the_plan() {
+    // The second neighbour read must only fill in hosts already found. If it
+    // added hosts, traffic from an unrelated process would put addresses
+    // outside the plan into the results.
+    let lan = require_lan!(TestLan::create(24, &[(151, vec![8080])]));
+    lan.warm_neighbour_table();
+
+    let plan = TargetPlanBuilder::new()
+        .include("10.42.24.200/32".parse::<TargetSpec>().unwrap())
+        .build()
+        .unwrap();
+
+    let platform = platform::host_platform();
+    let engine = Engine::new(SystemTransport::new(), lan_config(vec![8080], active_only()));
+    let report = engine.scan(&plan, Some(platform.as_ref()));
+
+    assert!(
+        report.hosts.is_empty(),
+        "the real host at .151 leaked into a plan that excluded it: {:?}",
+        report.hosts
+    );
+}
+
+#[test]
 fn combined_techniques_agree_on_the_same_host_set() {
     // Each technique should find the same hosts; disagreement means one of them
     // is producing false positives or negatives.

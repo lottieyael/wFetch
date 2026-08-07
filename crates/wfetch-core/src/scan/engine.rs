@@ -348,6 +348,32 @@ impl<T: Transport + 'static> Engine<T> {
                     }
                 }
             }
+
+            // Re-read the neighbour table now that probing has generated
+            // traffic. The first read happened before a single packet was sent,
+            // so on a cold ARP cache it saw nothing — and the MAC is the single
+            // strongest identification signal available, since it carries the
+            // vendor OUI. Without this pass a first scan reports no MACs and a
+            // second scan of the same network reports them all, which looks
+            // like the scanner is unreliable.
+            if self.config.techniques.neighbor_table {
+                if let Some(Ok(entries)) = platform.map(|p| p.neighbors()) {
+                    for e in entries {
+                        if !e.state.implies_host_present() {
+                            continue;
+                        }
+                        // Only fill in hosts already found. An ARP entry alone
+                        // was handled by the passive pass; adding hosts here
+                        // would let traffic from an unrelated process leak
+                        // addresses outside the plan into the results.
+                        if let Some(h) = hosts.get_mut(&e.ip) {
+                            if h.mac.is_none() {
+                                h.mac = e.mac;
+                            }
+                        }
+                    }
+                }
+            }
         }
 
         // ---- Identify ------------------------------------------------------
