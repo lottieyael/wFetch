@@ -28,7 +28,11 @@ use wfetch_core::target::{TargetPlan, TargetPlanBuilder, TargetSpec, DEFAULT_MAX
 const EXIT_ERROR: u8 = 1;
 /// Exit code for a scan that ran cleanly but found nothing, under
 /// `--fail-if-empty`.
-const EXIT_NO_HOSTS: u8 = 2;
+///
+/// Deliberately not 2: clap exits with 2 on a usage error, and a script that
+/// cannot tell "you typed the command wrong" from "the network is empty" will
+/// eventually act on the wrong one.
+const EXIT_NO_HOSTS: u8 = 3;
 
 #[derive(Parser)]
 #[command(
@@ -156,7 +160,7 @@ struct ScanArgs {
     #[arg(long)]
     include_all_addresses: bool,
 
-    /// Exit with code 2 if no hosts are found.
+    /// Exit with code 3 if no hosts are found.
     #[arg(long)]
     fail_if_empty: bool,
 }
@@ -593,6 +597,22 @@ mod tests {
             }
             _ => panic!("expected inventory"),
         }
+    }
+
+    #[test]
+    fn the_no_hosts_exit_code_does_not_collide_with_a_usage_error() {
+        // clap exits with 2 on a usage error. A script that cannot tell "you
+        // typed the command wrong" from "the network is empty" will eventually
+        // act on the wrong one.
+        assert_ne!(EXIT_NO_HOSTS, 2);
+        assert_ne!(EXIT_NO_HOSTS, EXIT_ERROR);
+        assert_ne!(EXIT_ERROR, 2);
+
+        // And the parser really does use 2, so the constraint is not academic.
+        let Err(err) = Cli::try_parse_from(["wfetch", "--nonsense"]) else {
+            panic!("an unknown flag should be a usage error");
+        };
+        assert_eq!(err.exit_code(), 2);
     }
 
     #[test]
