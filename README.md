@@ -25,7 +25,7 @@ Example Domain
 
 Agents regularly need one page, but generic fetch tools can dump tens of thousands of irrelevant tokens into the session. Raw HTML also contains scripts, navigation, hidden elements, and potentially hostile instructions.
 
-wFetch does four deliberately small things:
+wFetch does five deliberately small things:
 
 - extracts visible text from HTML and prefers `<main>`, `<article>`, or `role="main"`
 - caps returned content at 12,000 characters by default
