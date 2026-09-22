@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "wfetch-agent"
+description = "Bounded, untrusted web text for terminal agents"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Patyi Simon" }]
+dynamic = ["version"]
+keywords = ["agents", "cli", "html", "prompt-injection", "web"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Environment :: Console",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Internet :: WWW/HTTP",
+]
+
+[project.scripts]
+wfetch = "wfetch:main"
+
+[project.urls]
+Homepage = "https://github.com/dogalesz/wFetch"
+Issues = "https://github.com/dogalesz/wFetch/issues"
+Repository = "https://github.com/dogalesz/wFetch"
+
+[tool.setuptools]
+py-modules = ["wfetch"]
+
+[tool.setuptools.dynamic]
+version = { attr = "wfetch.VERSION" }
