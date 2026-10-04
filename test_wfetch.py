@@ -1,3 +1,6 @@
+import contextlib
+import io
+import json
 import socket
 import threading
 import time
@@ -10,6 +13,7 @@ from wfetch import (
     connect_addresses,
     extract_html,
     fetch,
+    main,
     supported_content_type,
     validate_url,
 )
@@ -32,10 +36,17 @@ class TestHandler(BaseHTTPRequestHandler):
         body = b"""<html><head><title>Local fixture</title></head><body>
         <div>Visible chrome</div><div role="main"><h1>Release ready</h1>
         <p>Semantic main content.</p></div></body></html>"""
+        if self.path == "/long":
+            body = ("<nav><h2>Navigation</h2></nav><main><h1>Guide</h1><p>"
+                    + "padding " * 2000
+                    + "</p><h2>Scientific <em>objectives</em></h2><p>Find galaxies.</p>"
+                    "<div hidden><h2>Secret</h2></div><h3>Details</h3><p>Deep answer.</p>"
+                    "<h2>Other</h2><p>Outside selection.</p></main>").encode()
         try:
             self.send_response(200)
             if self.path != "/missing-content-type":
-                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Content-Type", "text/plain" if self.path == "/text"
+                                 else "text/html; charset=utf-8")
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             self.wfile.write(body)
@@ -86,6 +97,55 @@ class WFetchTests(unittest.TestCase):
         self.assertEqual(receipt["title"], "Local fixture")
         self.assertEqual(receipt["content"], "Release ready\nSemantic main content.")
         self.assertNotIn("Visible chrome", receipt["content"])
+
+    def test_outline_and_deep_section_cli_workflow(self):
+        def run(*args):
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                status = main([f"{self.base_url}/long", "--allow-private", "--json", *args])
+            self.assertEqual(status, 0)
+            return json.loads(output.getvalue())
+
+        self.assertNotIn("Find galaxies", run()["content"])
+        outline = run("--outline")
+        self.assertEqual(outline["content"],
+                         "1. # Guide\n2. ## Scientific objectives\n3. ### Details\n4. ## Other")
+        selected = run("--section", "SCIENTIFIC objectives")
+        self.assertEqual(selected["content"],
+                         "Scientific objectives\nFind galaxies.\nDetails\nDeep answer.")
+        self.assertEqual(run("--section", "#2")["content"], selected["content"])
+        self.assertTrue(selected["untrusted"])
+        self.assertFalse(selected["truncated"])
+        for mode in (("--outline",), ("--section", "#2")):
+            full = run(*mode)
+            bounded = run(*mode, "--max-chars", "10")
+            self.assertEqual(bounded["content"], full["content"][:10])
+            self.assertEqual(bounded["sha256"], full["sha256"])
+            self.assertEqual(bounded["returned_characters"], 10)
+            self.assertTrue(bounded["truncated"])
+
+    def test_section_duplicate_missing_and_fallback_headings(self):
+        source = "<body><h2>A</h2><p>First</p><h2>A</h2><p>Second</p></body>"
+        with self.assertRaisesRegex(FetchError, "ambiguous"):
+            extract_html(source, section="A")
+        self.assertEqual(extract_html(source, section="#2")[1], "A\nSecond")
+        for selector in ("Missing", "#3", "#0"):
+            with self.subTest(selector=selector), self.assertRaisesRegex(FetchError, "not found"):
+                extract_html(source, section=selector)
+        self.assertEqual(extract_html("<h2>Last</h2>Tail", section="Last")[1], "Last\nTail")
+        sphinx = '<h2>Task cancellation<a href="#task">¶</a></h2><p>Cancel safely.</p>'
+        self.assertEqual(extract_html(sphinx, outline=True)[1], "1. ## Task cancellation")
+        self.assertIn("Cancel safely.", extract_html(sphinx, section="task cancellation")[1])
+        with self.assertRaisesRegex(FetchError, "no visible"):
+            extract_html("<h2>Chrome</h2><main><p>No headings</p></main>", outline=True)
+
+    def test_selection_rejects_non_html_and_conflicting_flags(self):
+        for options in ({"outline": True}, {"section": "Title"}):
+            with self.subTest(options=options), self.assertRaisesRegex(FetchError, "require HTML"):
+                fetch(f"{self.base_url}/text", 1000, 2, True, **options)
+        with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as error:
+            main([f"{self.base_url}/page", "--outline", "--section", "Title"])
+        self.assertEqual(error.exception.code, 2)
 
     def test_timeout_is_a_total_network_deadline(self):
         started = time.monotonic()

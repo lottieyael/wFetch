@@ -60,6 +60,13 @@ wfetch https://example.com --max-chars 4000
 # Structured receipt for tools and scripts
 wfetch https://example.com --json
 
+# Find headings, then retrieve a section (including its subsections)
+wfetch https://en.wikipedia.org/wiki/James_Webb_Space_Telescope --outline
+wfetch https://en.wikipedia.org/wiki/James_Webb_Space_Telescope --section "Mission goals" --max-chars 4000
+
+# Use an outline number when heading names repeat
+wfetch https://example.com --section '#3' --json
+
 # Save with the shell instead of teaching wFetch another file API
 wfetch https://example.com > evidence.txt
 
@@ -73,6 +80,21 @@ wfetch https://example.com --timeout 5
 Exit code `0` means a readable response was produced. Fetch, policy, HTTP, and content-type failures return `1` with a short error on stderr.
 
 Responses without a `Content-Type` header are rejected instead of being silently treated as plain text.
+
+`--outline` lists visible HTML headings from the same main content used for normal
+extraction. `--section` matches the complete heading name, ignoring case and
+collapsing whitespace, or accepts a one-based outline number such as `'#3'`.
+Trailing `¶` permalink markers are omitted from heading names.
+The selected text includes the heading and its subsections, stopping at the next
+heading of equal or higher level. Duplicate names require a number; missing
+headings and non-HTML responses produce an error. These two flags cannot be combined.
+
+Both modes honor `--max-chars` and retain the untrusted-content boundary. In their
+receipts, `characters` and `sha256` describe the complete extracted outline or
+selected section before the character limit, rather than the whole page.
+`download_truncated` still reports the network download limit, so an outline may
+be incomplete. Each invocation fetches the page again; numbers can change if its
+headings change. Only HTML heading tags (`h1` through `h6`) are recognized.
 
 ## Security boundary
 

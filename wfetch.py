@@ -228,6 +228,8 @@ class VisibleTextParser(HTMLParser):
         self.body_depth = 0
         self.focus_depth = 0
         self.title_depth = 0
+        self.headings: list[dict] = []
+        self.heading: dict | None = None
 
     @staticmethod
     def _hidden(attrs: dict[str, str]) -> bool:
@@ -270,6 +272,14 @@ class VisibleTextParser(HTMLParser):
             if tag == "li":
                 self._append("- ")
 
+        if self.skip_depth == 0 and tag in {"h1", "h2", "h3", "h4", "h5", "h6"}:
+            self.heading = {
+                "tag": tag, "level": int(tag[1]), "parts": [],
+                "starts": (len(self.document), len(self.body), len(self.focused)),
+                "body": bool(self.body_depth), "focused": bool(self.focus_depth),
+            }
+            self.headings.append(self.heading)
+
         if tag not in self.VOID:
             self.stack.append((tag, blocked, body, focus, title))
 
@@ -292,6 +302,8 @@ class VisibleTextParser(HTMLParser):
 
         closing = self.stack[match:]
         del self.stack[match:]
+        if self.heading and any(entry[0] == self.heading["tag"] for entry in closing):
+            self.heading = None
         for _, blocked, body, focus, title in reversed(closing):
             self.skip_depth -= blocked
             self.body_depth -= body
@@ -304,6 +316,8 @@ class VisibleTextParser(HTMLParser):
         if self.title_depth:
             self.title.append(data)
             return
+        if self.heading is not None:
+            self.heading["parts"].append(data)
         self._append(data)
 
 
@@ -314,11 +328,48 @@ def normalize_text(parts: list[str]) -> str:
     return re.sub(r"\n{2,}", "\n", text).strip()
 
 
-def extract_html(source: str) -> tuple[str, str]:
+def extract_html(
+    source: str, *, outline: bool = False, section: str | None = None,
+) -> tuple[str, str]:
     parser = VisibleTextParser()
     parser.feed(source)
     parser.close()
-    content = normalize_text(parser.focused or parser.body or parser.document)
+    parts = parser.focused or parser.body or parser.document
+    scope = 2 if parser.focused else 1 if parser.body else 0
+    headings = [
+        heading for heading in parser.headings
+        if (scope == 0 or heading["focused" if scope == 2 else "body"])
+    ]
+    for heading in headings:
+        # Sphinx appends a pilcrow permalink to otherwise plain heading names.
+        heading["name"] = " ".join("".join(heading["parts"]).split()).rstrip("¶").rstrip()
+    if outline:
+        if not headings:
+            raise FetchError("no visible HTML headings found")
+        content = "\n".join(
+            f"{index}. {'#' * heading['level']} {heading['name']}"
+            for index, heading in enumerate(headings, 1)
+        )
+    elif section is not None:
+        number = re.fullmatch(r"#([1-9][0-9]*)", section)
+        matches = [
+            index for index, heading in enumerate(headings)
+            if (str(index + 1) == number[1] if number else
+                heading["name"].casefold() == " ".join(section.split()).casefold())
+        ]
+        if not matches:
+            raise FetchError("section not found; use --outline to list headings")
+        if len(matches) > 1:
+            raise FetchError("ambiguous section; use --outline and select its '#N' number")
+        index = matches[0]
+        heading = headings[index]
+        end = next(
+            (item["starts"][scope] for item in headings[index + 1:]
+             if item["level"] <= heading["level"]), len(parts),
+        )
+        content = normalize_text(parts[heading["starts"][scope]:end])
+    else:
+        content = normalize_text(parts)
     return normalize_text(parser.title), content
 
 
@@ -350,7 +401,12 @@ def read_response(
     return raw[:MAX_DOWNLOAD_BYTES], len(raw) > MAX_DOWNLOAD_BYTES
 
 
-def fetch(url: str, max_chars: int, timeout: float, allow_private: bool) -> dict:
+def fetch(
+    url: str, max_chars: int, timeout: float, allow_private: bool,
+    *, outline: bool = False, section: str | None = None,
+) -> dict:
+    if outline and section is not None:
+        raise FetchError("--outline and --section cannot be combined")
     if timeout <= 0:
         raise FetchError("timeout must be greater than zero")
 
@@ -404,8 +460,11 @@ def fetch(url: str, max_chars: int, timeout: float, allow_private: bool) -> dict
             except LookupError as error:
                 raise FetchError(f"unknown response charset: {charset}") from error
 
+            is_html = content_type in {"text/html", "application/xhtml+xml"}
+            if (outline or section is not None) and not is_html:
+                raise FetchError("--outline and --section require HTML content")
             title, content = (
-                extract_html(source)
+                extract_html(source, outline=outline, section=section)
                 if content_type in {"text/html", "application/xhtml+xml"}
                 else ("", source.strip())
             )
@@ -476,6 +535,11 @@ def build_parser() -> argparse.ArgumentParser:
         help=f"maximum returned content characters (default: {DEFAULT_MAX_CHARS})",
     )
     parser.add_argument("--json", action="store_true", help="emit a JSON receipt")
+    selection = parser.add_mutually_exclusive_group()
+    selection.add_argument("--outline", action="store_true", help="list numbered HTML headings")
+    selection.add_argument(
+        "--section", help="select an exact heading name (case-insensitive) or '#N' outline number",
+    )
     parser.add_argument(
         "--allow-private",
         action="store_true",
@@ -497,7 +561,10 @@ def main(argv: list[str] | None = None) -> int:
         build_parser().error("--timeout must be greater than zero")
 
     try:
-        receipt = fetch(args.url, args.max_chars, args.timeout, args.allow_private)
+        receipt = fetch(
+            args.url, args.max_chars, args.timeout, args.allow_private,
+            outline=args.outline, section=args.section,
+        )
         output = (
             json.dumps(receipt, ensure_ascii=False, separators=(",", ":"))
             if args.json

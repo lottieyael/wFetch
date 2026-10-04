@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Added `--outline` to list visible HTML headings with selectable numbers.
+- Added `--section` to retrieve a heading and its subsections by name or outline number.
+- Both modes preserve output budgets, source receipts, and untrusted-content boundaries.
+
 ## 1.0.0 - 2026-09-22
 
 - Promoted the terminal-first rewrite to stable after two independent live audits.
